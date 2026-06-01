@@ -1,11 +1,19 @@
 # アーキテクチャ
 
+## 選定基準
+
+- 無料で使えること
+- クレジットカード登録が不要であること
+
+---
+
 ## 技術スタック
 
 - Backend: Node.js + Express + TypeScript
-- Frontend: React + Vite + TypeScript + Tailwind CSS
-- DB: MongoDB Atlas
-- AI: Anthropic Claude API（claude-sonnet-4-6）
+- Hosting: Vercel（無料枠、カード不要、スリープなし）
+- Frontend: React Native（Expo）
+- DB: MongoDB Atlas M0（無料固定）
+- AI: Google Gemini API（gemini-2.0-flash、カード不要・無料枠あり）
 - Web検索: Tavily API（検討中）
 
 ---
@@ -27,9 +35,9 @@ project_gr/
 │   │   ├── plan.ts
 │   │   └── research.ts
 │   └── server.ts
-└── front/
+└── mobile/
     └── src/
-        ├── pages/
+        ├── screens/
         │   ├── log/
         │   ├── knowledge/
         │   ├── dashboard/
