@@ -1,0 +1,23 @@
+{
+	"$schema": "https://json.schemastore.org/claude-code-settings.json",
+	"permissions": {
+		"allow": ["WebFetch", "WebSearch", "Bash(pnpm *)", "Bash(git status)", "Bash(git log *)", "Bash(git diff *)", "Read(docs/research/**)", "Write(docs/research/**)", "Edit(docs/research/**)", "Read(docs/strategy/**)", "Read(ref/**)", "Write(ref/**)", "Edit(ref/**)"],
+		"deny": ["Read(./.env)", "Read(./.env.*)", "Edit(./.env)", "Edit(./.env.*)", "Bash(git push -f *)", "Bash(git reset --hard *)"],
+		"ask": ["Write(docs/strategy/**)", "Edit(docs/strategy/**)"]
+	},
+	"hooks": {
+		"PostToolUse": [
+			{
+				"matcher": "Write|Edit",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "$f = ([Console]::In.ReadToEnd() | ConvertFrom-Json).tool_input.file_path; if ($f) { pnpm exec prettier --write $f } 2>$null",
+						"shell": "powershell"
+					}
+				]
+			}
+		]
+	},
+	"language": "japanese"
+}

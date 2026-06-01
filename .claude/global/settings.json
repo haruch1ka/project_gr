@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell -Command \"New-Item -ItemType Directory -Path 'D:\\\\08_otherData\\\\taihoHP\\\\docs\\\\research\\\\taiho旧ページ' -Force | Select-Object -ExpandProperty FullName\")",
+      "Bash(node -e \"const fs=require\\('fs'\\); const p='d:/05_scripts/00main/02AnimateCC_DEV/src/__lib/bunkei_kanji/changeDuration.ts'; const lines=fs.readFileSync\\(p,'utf8'\\).split\\('\\\\n'\\); let s=-1,e=-1; for\\(let i=0;i<lines.length;i++\\){if\\(lines[i].indexOf\\('const removeTweenNoneKeyFrames = '\\)!==-1\\){s=i;} if\\(s!==-1&&i>s&&lines[i]==='};'\\){e=i;break;}} process.stdout.write\\('s='+s+' e='+e+'\\\\n'\\); if\\(s!==-1&&e!==-1\\){lines.splice\\(s,e-s+2\\);fs.writeFileSync\\(p,lines.join\\('\\\\n'\\),'utf8'\\);process.stdout.write\\('OK\\\\n'\\);}\")",
+      "Bash(Get-ChildItem \"d:\\\\08_otherData\\\\taihoHP\\\\src\\\\article\\\\column\\\\2026\\\\05\\\\\" | Select-Object Name)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\taiho\\Desktop"
+    ]
+  },
+  "autoUpdatesChannel": "latest",
+  "theme": "dark",
+  "effortLevel": "medium",
+  "preferredNotifChannel": "terminal_bell",
+  "hooks": {
+    "PermissionRequest": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "& \"$env:USERPROFILE/.claude/sound/play.ps1\"",
+            "shell": "powershell",
+            "async": true
+          }
+        ]
+      }
+    ]
+  }
+}
