@@ -12,6 +12,13 @@ export type Experience = {
   createdAt: string;
 };
 
+export type KnowledgeCategory = {
+  _id?: string;
+  field: string;
+  name: string;
+  createdAt: string;
+};
+
 export type KnowledgeItem = {
   _id?: string;
   field: string;
@@ -21,9 +28,7 @@ export type KnowledgeItem = {
   createdAt: string;
 };
 
-export type KnowledgeCategory = {
-  _id?: string;
-  field: string;
-  name: string;
-  createdAt: string;
+export type ChatMessage = {
+  role: 'user' | 'assistant';
+  text: string;
 };

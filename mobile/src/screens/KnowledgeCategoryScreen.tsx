@@ -1,9 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, FlatList } from 'react-native';
+import React, { useState } from 'react';
+import {
+  View, Text, TouchableOpacity, StyleSheet,
+  FlatList, SafeAreaView, Modal, TextInput,
+} from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../../App';
-import { db } from '../services/mongodb';
+import { colors, font } from '../constants/theme';
+import { mockItems } from '../constants/mockData';
+import { KnowledgeItem } from '../types';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'KnowledgeCategory'>;
@@ -12,62 +17,96 @@ type Props = {
 
 export default function KnowledgeCategoryScreen({ navigation, route }: Props) {
   const { field, category } = route.params;
-  const [items, setItems] = useState<string[]>([]);
+  const [items, setItems] = useState<KnowledgeItem[]>(mockItems[field]?.[category] ?? []);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [newContent, setNewContent] = useState('');
 
-  useEffect(() => {
-    loadItems();
-  }, []);
-
-  async function loadItems() {
-    try {
-      const res = await db.find('knowledge_items', { field, category });
-      setItems(res.documents?.map((d: any) => d.content) ?? []);
-    } catch {}
+  function addItem() {
+    if (!newContent.trim()) return;
+    setItems([...items, { field, category, content: newContent.trim(), notes: [], createdAt: '' }]);
+    setNewContent('');
+    setModalVisible(false);
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
           <Text style={styles.back}>←</Text>
         </TouchableOpacity>
         <Text style={styles.title}>{category}</Text>
       </View>
+
       <FlatList
-        data={[...items, '__add__']}
-        keyExtractor={(item) => item}
+        data={[...items, { field, category, content: '__add__', notes: [], createdAt: '' }]}
+        keyExtractor={(item) => item.content}
         renderItem={({ item }) =>
-          item === '__add__' ? (
-            <TouchableOpacity style={styles.linkItem}>
+          item.content === '__add__' ? (
+            <TouchableOpacity style={styles.linkItem} onPress={() => setModalVisible(true)}>
               <Text style={styles.addText}>＋</Text>
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
               style={styles.linkItem}
-              onPress={() => navigation.navigate('KnowledgeItem', { field, category, item })}
+              onPress={() => navigation.navigate('KnowledgeItem', { field, category, item: item.content })}
+              activeOpacity={0.6}
             >
-              <Text style={styles.linkText}>{item}</Text>
+              <Text style={styles.linkText}>{item.content}</Text>
             </TouchableOpacity>
           )
         }
       />
-    </View>
+
+      <Modal visible={modalVisible} transparent animationType="slide">
+        <View style={styles.overlay}>
+          <View style={styles.modal}>
+            <Text style={styles.modalTitle}>知識を追加</Text>
+            <TextInput
+              style={[styles.modalInput, { height: 80 }]}
+              placeholder="例：朝マズメは中層レンジが基本"
+              placeholderTextColor={colors.textMuted}
+              value={newContent}
+              onChangeText={setNewContent}
+              multiline
+              autoFocus
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity onPress={() => setModalVisible(false)}>
+                <Text style={styles.cancelBtn}>キャンセル</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.addBtn} onPress={addItem}>
+                <Text style={styles.addBtnText}>追加</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff', paddingTop: 52 },
+  container: { flex: 1, backgroundColor: colors.bg },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 20, paddingVertical: 12,
+    borderBottomWidth: 1, borderBottomColor: colors.border,
   },
-  back: { fontSize: 20, color: '#333', marginRight: 16 },
-  title: { fontSize: 18, fontWeight: '700' },
-  linkItem: { paddingVertical: 16, paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: '#f2f2f2' },
-  linkText: { fontSize: 16, color: '#1a1aff', textDecorationLine: 'underline' },
-  addText: { fontSize: 20, color: '#aaa' },
+  back: { fontSize: 20, color: colors.text, marginRight: 16 },
+  title: { fontSize: font.lg, fontWeight: '700', flex: 1 },
+  linkItem: { paddingVertical: 16, paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: colors.border },
+  linkText: { fontSize: 16, color: colors.link, textDecorationLine: 'underline' },
+  addText: { fontSize: 22, color: colors.textMuted },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'flex-end' },
+  modal: { backgroundColor: colors.bg, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, gap: 16 },
+  modalTitle: { fontSize: font.lg, fontWeight: '700' },
+  modalInput: {
+    borderWidth: 1.5, borderColor: colors.borderInput, borderRadius: 12,
+    padding: 14, fontSize: font.md, color: colors.text, backgroundColor: colors.bgInput,
+    textAlignVertical: 'top',
+  },
+  modalActions: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 16 },
+  cancelBtn: { fontSize: font.md, color: colors.textMuted },
+  addBtn: { backgroundColor: colors.primary, borderRadius: 10, paddingHorizontal: 20, paddingVertical: 10 },
+  addBtnText: { color: '#fff', fontWeight: '700', fontSize: font.md },
 });
