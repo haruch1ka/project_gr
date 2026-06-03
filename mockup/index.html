@@ -81,7 +81,7 @@
   </div>
 
   <!-- ══════════════════════════════════
-       知識画面
+       知識画面（カテゴリ一覧）
   ══════════════════════════════════ -->
   <div class="screen" id="knowledge">
     <div class="header">
@@ -94,85 +94,37 @@
         <button class="btn-icon" onclick="goTo('plan')">📋</button>
       </div>
     </div>
+    <div class="link-list">
+      <div class="link-item" onclick="goToCategory('タイミング')">タイミング</div>
+      <div class="link-item" onclick="goToCategory('道具・仕掛け')">道具・仕掛け</div>
+      <div class="link-item" onclick="goToCategory('場所')">場所</div>
+      <div class="link-item" onclick="goToCategory('まだわからないこと')">まだわからないこと</div>
+      <div class="link-item add-link">＋</div>
+    </div>
+  </div>
 
-    <div class="knowledge-list">
+  <!-- ══════════════════════════════════
+       知識画面（カテゴリ内・項目一覧）
+  ══════════════════════════════════ -->
+  <div class="screen" id="knowledge-category">
+    <div class="header">
+      <button class="btn-back" onclick="goTo('knowledge')">←</button>
+      <div class="header-title" id="category-title"></div>
+    </div>
+    <div class="link-list" id="category-items"></div>
+  </div>
 
-      <div class="k-item">
-        <div class="k-header" onclick="toggleK(this)">
-          <span class="k-toggle">▶</span>
-          <div class="k-content">
-            <span class="k-text">朝マズメは中層レンジが釣れやすい</span>
-            <span class="k-badge badge-hypothesis">仮説</span>
-          </div>
-        </div>
-        <div class="k-children">
-          <div class="k-child-group">
-            <div class="k-child-label">裏付けた経験</div>
-            <div class="k-child-item"><span class="k-child-dot">·</span> 6/2　アジ連続ヒット、中層で反応</div>
-            <div class="k-child-item"><span class="k-child-dot">·</span> 5/28　サバ5匹、同条件</div>
-          </div>
-          <div class="k-child-group">
-            <div class="k-child-label">Web情報</div>
-            <div class="k-child-item"><span class="k-child-dot">·</span> アジングの棚取り：朝は中層〜表層が基本</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="k-item">
-        <div class="k-header" onclick="toggleK(this)">
-          <span class="k-toggle">▶</span>
-          <div class="k-content">
-            <span class="k-text">タモは釣り始め前に準備しておく</span>
-            <span class="k-badge badge-hypothesis">仮説</span>
-          </div>
-        </div>
-        <div class="k-children">
-          <div class="k-child-group">
-            <div class="k-child-label">裏付けた経験</div>
-            <div class="k-child-item"><span class="k-child-dot">·</span> 6/3　大物バラした、タモ準備が遅かった</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="k-item">
-        <div class="k-header" onclick="toggleK(this)">
-          <span class="k-toggle">▶</span>
-          <div class="k-content">
-            <span class="k-text">風速5m以上は釣りにならない</span>
-            <span class="k-badge badge-verified">検証済み</span>
-          </div>
-        </div>
-        <div class="k-children">
-          <div class="k-child-group">
-            <div class="k-child-label">裏付けた経験</div>
-            <div class="k-child-item"><span class="k-child-dot">·</span> 6/1　風強くて早上がり</div>
-            <div class="k-child-item"><span class="k-child-dot">·</span> 5/20　同条件で釣果ゼロ</div>
-            <div class="k-child-item"><span class="k-child-dot">·</span> 5/10　強風で仕掛けが安定しなかった</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="k-item">
-        <div class="k-header" onclick="toggleK(this)">
-          <span class="k-toggle">▶</span>
-          <div class="k-content">
-            <span class="k-text">夕マズメより朝マズメの方が釣れる</span>
-            <span class="k-badge badge-disproved">反証済み</span>
-          </div>
-        </div>
-        <div class="k-children">
-          <div class="k-child-group">
-            <div class="k-child-label">反例になった経験</div>
-            <div class="k-child-item"><span class="k-child-dot">·</span> 6/2　夕マズメの方が釣果が多かった</div>
-            <div class="k-child-item"><span class="k-child-dot">·</span> 5/25　夕マズメで大物ヒット</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="k-add">
-        <span>＋</span> 知識を追加
-      </div>
-
+  <!-- ══════════════════════════════════
+       知識画面（項目詳細）
+  ══════════════════════════════════ -->
+  <div class="screen" id="knowledge-item">
+    <div class="header">
+      <button class="btn-back" id="item-back-btn">←</button>
+      <div class="header-title" id="item-title"></div>
+    </div>
+    <div class="item-detail">
+      <div class="item-notes" id="item-notes"></div>
+      <div class="item-add">メモを追加…</div>
     </div>
   </div>
 
