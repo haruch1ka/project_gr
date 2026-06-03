@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>project_gr モック</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', sans-serif;
+      background: #f0f0f0;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+      padding: 20px 0;
+    }
+
+    .phone {
+      width: 100%;
+      max-width: 390px;
+      min-height: 100vh;
+      background: #fff;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* ── 画面共通 ── */
+    .screen {
+      display: none;
+      flex-direction: column;
+      height: 100vh;
+      background: #fff;
+    }
+    .screen.active { display: flex; }
+
+    /* ── ヘッダー ── */
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 52px 20px 12px;
+      background: #fff;
+      border-bottom: 1px solid #eee;
+    }
+    .header-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #111;
+    }
+    .btn-back {
+      background: none;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+      padding: 4px;
+      color: #333;
+    }
+    .header-actions {
+      display: flex;
+      gap: 4px;
+      margin-left: auto;
+    }
+    .btn-icon {
+      background: none;
+      border: none;
+      font-size: 18px;
+      cursor: pointer;
+      padding: 6px 8px;
+      border-radius: 8px;
+      color: #555;
+      transition: background 0.15s;
+    }
+    .btn-icon:hover, .btn-icon.active { background: #f0f0f0; }
+    .btn-icon.active { color: #4f7bff; }
+
+    /* ── ホーム画面 ── */
+    #home .header { border-bottom: none; }
+    #home .header-title { font-size: 22px; }
+
+    .fields-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      padding: 20px;
+      flex: 1;
+      align-content: start;
+    }
+    .field-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      aspect-ratio: 1;
+      background: #f7f8fc;
+      border-radius: 16px;
+      cursor: pointer;
+      transition: transform 0.1s, background 0.15s;
+      border: 2px solid transparent;
+    }
+    .field-card:active { transform: scale(0.95); }
+    .field-card:hover { background: #eef1fb; border-color: #c5d0f5; }
+    .field-card.add-card { background: #fff; border: 2px dashed #ccc; color: #aaa; }
+    .field-card.add-card:hover { border-color: #4f7bff; color: #4f7bff; background: #f0f4ff; }
+    .field-icon { font-size: 36px; margin-bottom: 8px; }
+    .field-name { font-size: 13px; font-weight: 600; color: #333; }
+    .add-plus { font-size: 28px; margin-bottom: 6px; }
+    .add-label { font-size: 12px; }
+
+    /* ── 記録画面 ── */
+    .recent-logs {
+      padding: 12px 20px 0;
+      max-height: 180px;
+      overflow-y: auto;
+    }
+    .recent-logs-title {
+      font-size: 11px;
+      color: #aaa;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+    }
+    .log-item {
+      display: flex;
+      gap: 10px;
+      padding: 8px 0;
+      border-bottom: 1px solid #f2f2f2;
+      font-size: 14px;
+      color: #444;
+    }
+    .log-date { color: #aaa; font-size: 12px; white-space: nowrap; min-width: 36px; }
+    .log-text { flex: 1; line-height: 1.4; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+    .record-form {
+      padding: 16px 20px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .form-label {
+      font-size: 12px;
+      color: #aaa;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .memo-input {
+      width: 100%;
+      border: 1.5px solid #e0e0e0;
+      border-radius: 12px;
+      padding: 14px;
+      font-size: 15px;
+      font-family: inherit;
+      resize: none;
+      height: 140px;
+      outline: none;
+      color: #222;
+      transition: border-color 0.15s;
+      background: #fafafa;
+    }
+    .memo-input:focus { border-color: #4f7bff; background: #fff; }
+    .memo-input::placeholder { color: #bbb; }
+
+    .btn-save {
+      background: #4f7bff;
+      color: #fff;
+      border: none;
+      border-radius: 14px;
+      padding: 16px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      width: 100%;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .btn-save:hover { background: #3a68f0; }
+    .btn-save:active { transform: scale(0.98); }
+
+    /* 保存トースト */
+    .toast {
+      position: fixed;
+      bottom: 40px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: #222;
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 20px;
+      font-size: 14px;
+      opacity: 0;
+      transition: opacity 0.2s, transform 0.2s;
+      pointer-events: none;
+      white-space: nowrap;
+      z-index: 100;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* ── 知識画面 ── */
+    .knowledge-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 0;
+    }
+    .k-item {
+      border-bottom: 1px solid #f2f2f2;
+    }
+    .k-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 12px 20px;
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+    .k-header:hover { background: #fafafa; }
+    .k-toggle {
+      font-size: 12px;
+      color: #aaa;
+      padding-top: 2px;
+      min-width: 14px;
+      transition: transform 0.2s;
+    }
+    .k-content { flex: 1; }
+    .k-text {
+      font-size: 15px;
+      color: #222;
+      line-height: 1.5;
+      font-weight: 500;
+    }
+    .k-badge {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 20px;
+      margin-left: 8px;
+      vertical-align: middle;
+    }
+    .badge-hypothesis { background: #fff3cd; color: #856404; }
+    .badge-verified { background: #d1f0e0; color: #1a6e3c; }
+    .badge-disproved { background: #f8d7da; color: #842029; }
+
+    .k-children {
+      display: none;
+      padding: 0 20px 8px 42px;
+    }
+    .k-children.open { display: block; }
+    .k-child-group {
+      margin-bottom: 8px;
+    }
+    .k-child-label {
+      font-size: 11px;
+      color: #aaa;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 4px;
+    }
+    .k-child-item {
+      display: flex;
+      gap: 8px;
+      font-size: 13px;
+      color: #555;
+      padding: 4px 0;
+      line-height: 1.4;
+    }
+    .k-child-dot { color: #bbb; }
+
+    .k-add {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 16px 20px;
+      color: #4f7bff;
+      font-size: 14px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    /* ── AI対話・Web・プラン（シンプルプレースホルダー） ── */
+    .placeholder {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      color: #bbb;
+    }
+    .placeholder-icon { font-size: 48px; }
+    .placeholder-text { font-size: 15px; font-weight: 500; }
+    .placeholder-sub { font-size: 13px; color: #ccc; }
+  </style>
+</head>
+<body>
+<div class="phone">
+
+  <!-- ══════════════════════════════════
+       ホーム画面
+  ══════════════════════════════════ -->
+  <div class="screen active" id="home">
+    <div class="header">
+      <div class="header-title">上達ノート</div>
+    </div>
+    <div class="fields-grid">
+      <div class="field-card" onclick="goTo('record')">
+        <div class="field-icon">🎣</div>
+        <div class="field-name">釣り</div>
+      </div>
+      <div class="field-card" onclick="goTo('record')">
+        <div class="field-icon">💪</div>
+        <div class="field-name">筋トレ</div>
+      </div>
+      <div class="field-card" onclick="goTo('record')">
+        <div class="field-icon">📖</div>
+        <div class="field-name">読書</div>
+      </div>
+      <div class="field-card add-card">
+        <div class="add-plus">＋</div>
+        <div class="add-label">追加</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════
+       記録画面
+  ══════════════════════════════════ -->
+  <div class="screen" id="record">
+    <div class="header">
+      <button class="btn-back" onclick="goTo('home')">←</button>
+      <div class="header-title">釣り</div>
+      <div class="header-actions">
+        <button class="btn-icon" title="Web収集" onclick="goTo('web')">🔍</button>
+        <button class="btn-icon" title="AI対話" onclick="goTo('chat')">💬</button>
+        <button class="btn-icon active" title="知識" onclick="goTo('knowledge')">📚</button>
+        <button class="btn-icon" title="プラン" onclick="goTo('plan')">📋</button>
+      </div>
+    </div>
+
+    <div class="recent-logs">
+      <div class="recent-logs-title">最近の記録</div>
+      <div class="log-item">
+        <span class="log-date">6/3</span>
+        <span class="log-text">朝マズメ、大物バラした。タモを先に準備すべきだった</span>
+      </div>
+      <div class="log-item">
+        <span class="log-date">6/2</span>
+        <span class="log-text">夕マズメ、アジ連続ヒット。レンジ中層が正解だった</span>
+      </div>
+      <div class="log-item">
+        <span class="log-date">6/1</span>
+        <span class="log-text">風強すぎて釣りにならず。早上がり</span>
+      </div>
+      <div class="log-item">
+        <span class="log-date">5/30</span>
+        <span class="log-text">新しいルアー試したが反応なし。カラーを変えてみる</span>
+      </div>
+    </div>
+
+    <div class="record-form">
+      <div>
+        <div class="form-label">メモ</div>
+        <textarea class="memo-input" id="memoInput" placeholder="今日の気づき、結果、次に試したいことなど…"></textarea>
+      </div>
+      <button class="btn-save" onclick="saveRecord()">保存する</button>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════
+       知識画面
+  ══════════════════════════════════ -->
+  <div class="screen" id="knowledge">
+    <div class="header">
+      <button class="btn-back" onclick="goTo('home')">←</button>
+      <div class="header-title">釣り</div>
+      <div class="header-actions">
+        <button class="btn-icon" onclick="goTo('web')">🔍</button>
+        <button class="btn-icon" onclick="goTo('chat')">💬</button>
+        <button class="btn-icon active" onclick="goTo('knowledge')">📚</button>
+        <button class="btn-icon" onclick="goTo('plan')">📋</button>
+      </div>
+    </div>
+
+    <div class="knowledge-list">
+
+      <div class="k-item">
+        <div class="k-header" onclick="toggleK(this)">
+          <span class="k-toggle">▶</span>
+          <div class="k-content">
+            <span class="k-text">朝マズメは中層レンジが釣れやすい</span>
+            <span class="k-badge badge-hypothesis">仮説</span>
+          </div>
+        </div>
+        <div class="k-children">
+          <div class="k-child-group">
+            <div class="k-child-label">裏付けた経験</div>
+            <div class="k-child-item"><span class="k-child-dot">·</span> 6/2　アジ連続ヒット、中層で反応</div>
+            <div class="k-child-item"><span class="k-child-dot">·</span> 5/28　サバ5匹、同条件</div>
+          </div>
+          <div class="k-child-group">
+            <div class="k-child-label">Web情報</div>
+            <div class="k-child-item"><span class="k-child-dot">·</span> アジングの棚取り：朝は中層〜表層が基本</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="k-item">
+        <div class="k-header" onclick="toggleK(this)">
+          <span class="k-toggle">▶</span>
+          <div class="k-content">
+            <span class="k-text">タモは釣り始め前に準備しておく</span>
+            <span class="k-badge badge-hypothesis">仮説</span>
+          </div>
+        </div>
+        <div class="k-children">
+          <div class="k-child-group">
+            <div class="k-child-label">裏付けた経験</div>
+            <div class="k-child-item"><span class="k-child-dot">·</span> 6/3　大物バラした、タモ準備が遅かった</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="k-item">
+        <div class="k-header" onclick="toggleK(this)">
+          <span class="k-toggle">▶</span>
+          <div class="k-content">
+            <span class="k-text">風速5m以上は釣りにならない</span>
+            <span class="k-badge badge-verified">検証済み</span>
+          </div>
+        </div>
+        <div class="k-children">
+          <div class="k-child-group">
+            <div class="k-child-label">裏付けた経験</div>
+            <div class="k-child-item"><span class="k-child-dot">·</span> 6/1　風強くて早上がり</div>
+            <div class="k-child-item"><span class="k-child-dot">·</span> 5/20　同条件で釣果ゼロ</div>
+            <div class="k-child-item"><span class="k-child-dot">·</span> 5/10　強風で仕掛けが安定しなかった</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="k-item">
+        <div class="k-header" onclick="toggleK(this)">
+          <span class="k-toggle">▶</span>
+          <div class="k-content">
+            <span class="k-text">夕マズメより朝マズメの方が釣れる</span>
+            <span class="k-badge badge-disproved">反証済み</span>
+          </div>
+        </div>
+        <div class="k-children">
+          <div class="k-child-group">
+            <div class="k-child-label">反例になった経験</div>
+            <div class="k-child-item"><span class="k-child-dot">·</span> 6/2　夕マズメの方が釣果が多かった</div>
+            <div class="k-child-item"><span class="k-child-dot">·</span> 5/25　夕マズメで大物ヒット</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="k-add">
+        <span>＋</span> 知識を追加
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════
+       AI対話画面（プレースホルダー）
+  ══════════════════════════════════ -->
+  <div class="screen" id="chat">
+    <div class="header">
+      <button class="btn-back" onclick="goTo('home')">←</button>
+      <div class="header-title">釣り</div>
+      <div class="header-actions">
+        <button class="btn-icon" onclick="goTo('web')">🔍</button>
+        <button class="btn-icon active" onclick="goTo('chat')">💬</button>
+        <button class="btn-icon" onclick="goTo('knowledge')">📚</button>
+        <button class="btn-icon" onclick="goTo('plan')">📋</button>
+      </div>
+    </div>
+    <div class="placeholder">
+      <div class="placeholder-icon">💬</div>
+      <div class="placeholder-text">AI対話</div>
+      <div class="placeholder-sub">経験と知識を文脈にAIと対話する</div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════
+       Web収集画面（プレースホルダー）
+  ══════════════════════════════════ -->
+  <div class="screen" id="web">
+    <div class="header">
+      <button class="btn-back" onclick="goTo('home')">←</button>
+      <div class="header-title">釣り</div>
+      <div class="header-actions">
+        <button class="btn-icon active" onclick="goTo('web')">🔍</button>
+        <button class="btn-icon" onclick="goTo('chat')">💬</button>
+        <button class="btn-icon" onclick="goTo('knowledge')">📚</button>
+        <button class="btn-icon" onclick="goTo('plan')">📋</button>
+      </div>
+    </div>
+    <div class="placeholder">
+      <div class="placeholder-icon">🔍</div>
+      <div class="placeholder-text">Web情報収集</div>
+      <div class="placeholder-sub">Web情報を仮説として知識プールへ投入する</div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════
+       プラン画面（プレースホルダー）
+  ══════════════════════════════════ -->
+  <div class="screen" id="plan">
+    <div class="header">
+      <button class="btn-back" onclick="goTo('home')">←</button>
+      <div class="header-title">釣り</div>
+      <div class="header-actions">
+        <button class="btn-icon" onclick="goTo('web')">🔍</button>
+        <button class="btn-icon" onclick="goTo('chat')">💬</button>
+        <button class="btn-icon" onclick="goTo('knowledge')">📚</button>
+        <button class="btn-icon active" onclick="goTo('plan')">📋</button>
+      </div>
+    </div>
+    <div class="placeholder">
+      <div class="placeholder-icon">📋</div>
+      <div class="placeholder-text">行動プラン</div>
+      <div class="placeholder-sub">AI対話から生成された次の行動プラン</div>
+    </div>
+  </div>
+
+  <!-- トースト通知 -->
+  <div class="toast" id="toast">保存しました</div>
+
+</div>
+
+<script>
+  function goTo(screenId) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(screenId).classList.add('active');
+  }
+
+  function toggleK(header) {
+    const toggle = header.querySelector('.k-toggle');
+    const children = header.nextElementSibling;
+    const isOpen = children.classList.contains('open');
+    children.classList.toggle('open', !isOpen);
+    toggle.textContent = isOpen ? '▶' : '▼';
+  }
+
+  function saveRecord() {
+    const input = document.getElementById('memoInput');
+    const text = input.value.trim();
+    if (!text) return;
+
+    const logs = document.querySelector('.recent-logs');
+    const today = new Date();
+    const dateStr = `${today.getMonth() + 1}/${today.getDate()}`;
+    const newItem = document.createElement('div');
+    newItem.className = 'log-item';
+    newItem.innerHTML = `<span class="log-date">${dateStr}</span><span class="log-text">${text}</span>`;
+    logs.insertBefore(newItem, logs.children[1]);
+
+    input.value = '';
+    showToast('保存しました');
+  }
+
+  function showToast(msg) {
+    const toast = document.getElementById('toast');
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 2000);
+  }
+</script>
+</body>
+</html>
