@@ -6,6 +6,7 @@ on:
       - claude/kabeuchi-jT9v0
     paths:
       - mockup/**
+  workflow_dispatch:
 
 permissions:
   contents: read
