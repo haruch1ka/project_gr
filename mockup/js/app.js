@@ -1,4 +1,5 @@
 function goTo(screenId) {
+  window.scrollTo(0, 0);
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(screenId).classList.add('active');
 }
