@@ -92,8 +92,8 @@ project_gr/
 
 ```bash
 # Backend
-cd back && npm run dev    # 開発サーバー起動
+cd back && pnpm dev    # 開発サーバー起動
 
 # Mobile
-cd mobile && npx expo start
+cd mobile && pnpm start
 ```
