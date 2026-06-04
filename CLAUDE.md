@@ -54,12 +54,13 @@ project_gr/
 ```typescript
 {
   field: string,
+  category: string,                              // ユーザー定義のカテゴリ
   content: string,
   webSources: ResearchResult[],
   supportingExperiences: Experience[],
   contradictingExperiences: Experience[],
   confidenceScore: number,           // ベイズ的に更新
-  status: 'hypothesis' | 'verified' | 'disproved',
+  status: 'hypothesis' | 'verified' | 'disproved',  // 閾値設計は未決定
   tags: string[],
 }
 ```
@@ -79,9 +80,9 @@ project_gr/
 
 ## 設計上の重要な決定
 
-- **confidenceScore の更新ロジック**：経験1件で小幅増加、複数回再現で大幅増加。Claudeが証拠の尤度（高・中・低）を判断してスコアに変換する。閾値設計は未決定（[`docs/research/knowledge-verification-theory.md`](docs/research/knowledge-verification-theory.md) 参照）。
-- **入力コスト設計**：軽量モード（経験ログ・アンケート）は摩擦ゼロが最優先。重量モード（Claude対話）のみコストをかける。「一言入力 → AIが構造化 → ユーザーが確認タップ」がパターン。
-- **ランダムアンケート**：3〜14日のランダム周期でClaudeが動的生成。Meta-Knowledge抽出の素材にする。
+- **confidenceScore の更新ロジック**：経験1件で小幅増加、複数回再現で大幅増加。Geminiが証拠の尤度（高・中・低）を判断してスコアに変換する。閾値設計は未決定（[`docs/research/knowledge-verification-theory.md`](docs/research/knowledge-verification-theory.md) 参照）。
+- **入力コスト設計**：軽量モード（経験ログ・アンケート）は摩擦ゼロが最優先。重量モード（Gemini対話）のみコストをかける。「一言入力 → Geminiが構造化 → ユーザーが確認タップ」がパターン。
+- **ランダムアンケート**：3〜14日のランダム周期でGeminiが動的生成。Meta-Knowledge抽出の素材にする。
 
 ---
 
