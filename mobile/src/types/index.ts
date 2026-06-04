@@ -12,19 +12,36 @@ export type Experience = {
   createdAt: string;
 };
 
-export type KnowledgeCategory = {
+export type ResearchResult = {
   _id?: string;
   field: string;
-  name: string;
-  createdAt: string;
+  query: string;
+  results: { title: string; url: string; snippet: string }[];
+  collectedAt: string;
+  usedInKnowledgeIds: string[];
 };
 
-export type KnowledgeItem = {
+export type Knowledge = {
   _id?: string;
   field: string;
   category: string;
   content: string;
-  notes: string[];
+  webSources: ResearchResult[];
+  supportingExperiences: Experience[];
+  contradictingExperiences: Experience[];
+  confidenceScore: number;
+  status: 'hypothesis' | 'verified' | 'disproved';
+  tags: string[];
+  createdAt: string;
+};
+
+export type Plan = {
+  _id?: string;
+  field: string;
+  proposal: string;
+  dialogHistory: ChatMessage[];
+  reviewedAt: string | null;
+  reviewNote: string | null;
   createdAt: string;
 };
 

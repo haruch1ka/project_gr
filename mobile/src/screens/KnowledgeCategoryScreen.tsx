@@ -7,8 +7,8 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../../App';
 import { colors, font } from '../constants/theme';
-import { mockItems } from '../constants/mockData';
-import { KnowledgeItem } from '../types';
+import { mockKnowledge } from '../constants/mockData';
+import { Knowledge } from '../types';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'KnowledgeCategory'>;
@@ -17,13 +17,18 @@ type Props = {
 
 export default function KnowledgeCategoryScreen({ navigation, route }: Props) {
   const { field, category } = route.params;
-  const [items, setItems] = useState<KnowledgeItem[]>(mockItems[field]?.[category] ?? []);
+  const existing = mockKnowledge.filter(k => k.field === field && k.category === category);
+  const [items, setItems] = useState<Knowledge[]>(existing);
   const [modalVisible, setModalVisible] = useState(false);
   const [newContent, setNewContent] = useState('');
 
   function addItem() {
     if (!newContent.trim()) return;
-    setItems([...items, { field, category, content: newContent.trim(), notes: [], createdAt: '' }]);
+    setItems([...items, {
+      field, category, content: newContent.trim(),
+      webSources: [], supportingExperiences: [], contradictingExperiences: [],
+      confidenceScore: 0.3, status: 'hypothesis', tags: [], createdAt: '',
+    }]);
     setNewContent('');
     setModalVisible(false);
   }
@@ -38,10 +43,10 @@ export default function KnowledgeCategoryScreen({ navigation, route }: Props) {
       </View>
 
       <FlatList
-        data={[...items, { field, category, content: '__add__', notes: [], createdAt: '' }]}
-        keyExtractor={(item) => item.content}
+        data={[...items, null]}
+        keyExtractor={(item, i) => item?.content ?? String(i)}
         renderItem={({ item }) =>
-          item.content === '__add__' ? (
+          item === null ? (
             <TouchableOpacity style={styles.linkItem} onPress={() => setModalVisible(true)}>
               <Text style={styles.addText}>＋</Text>
             </TouchableOpacity>

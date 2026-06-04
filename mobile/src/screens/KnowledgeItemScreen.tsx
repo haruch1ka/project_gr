@@ -7,7 +7,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../../App';
 import { colors, font } from '../constants/theme';
-import { mockItems } from '../constants/mockData';
+import { mockKnowledge } from '../constants/mockData';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'KnowledgeItem'>;
@@ -16,8 +16,8 @@ type Props = {
 
 export default function KnowledgeItemScreen({ navigation, route }: Props) {
   const { field, category, item } = route.params;
-  const found = mockItems[field]?.[category]?.find(i => i.content === item);
-  const [notes, setNotes] = useState<string[]>(found?.notes ?? []);
+  const found = mockKnowledge.find(k => k.field === field && k.category === category && k.content === item);
+  const [notes, setNotes] = useState<string[]>(found?.tags ?? []);
   const [adding, setAdding] = useState(false);
   const [newNote, setNewNote] = useState('');
 

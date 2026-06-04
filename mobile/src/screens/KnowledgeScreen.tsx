@@ -7,8 +7,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../../App';
 import { colors, font } from '../constants/theme';
-import { mockCategories } from '../constants/mockData';
-import { KnowledgeCategory } from '../types';
+import { mockKnowledge } from '../constants/mockData';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Knowledge'>;
@@ -17,13 +16,14 @@ type Props = {
 
 export default function KnowledgeScreen({ navigation, route }: Props) {
   const { field } = route.params;
-  const [categories, setCategories] = useState<KnowledgeCategory[]>(mockCategories[field] ?? []);
+  const existingCategories = [...new Set(mockKnowledge.filter(k => k.field === field).map(k => k.category))];
+  const [categories, setCategories] = useState<string[]>(existingCategories);
   const [modalVisible, setModalVisible] = useState(false);
   const [newName, setNewName] = useState('');
 
   function addCategory() {
     if (!newName.trim()) return;
-    setCategories([...categories, { field, name: newName.trim(), createdAt: '' }]);
+    setCategories([...categories, newName.trim()]);
     setNewName('');
     setModalVisible(false);
   }
@@ -52,20 +52,20 @@ export default function KnowledgeScreen({ navigation, route }: Props) {
       </View>
 
       <FlatList
-        data={[...categories, { field, name: '__add__', createdAt: '' }]}
-        keyExtractor={(item) => item.name}
+        data={[...categories, '__add__']}
+        keyExtractor={(item) => item}
         renderItem={({ item }) =>
-          item.name === '__add__' ? (
+          item === '__add__' ? (
             <TouchableOpacity style={styles.linkItem} onPress={() => setModalVisible(true)}>
               <Text style={styles.addText}>＋</Text>
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
               style={styles.linkItem}
-              onPress={() => navigation.navigate('KnowledgeCategory', { field, category: item.name })}
+              onPress={() => navigation.navigate('KnowledgeCategory', { field, category: item })}
               activeOpacity={0.6}
             >
-              <Text style={styles.linkText}>{item.name}</Text>
+              <Text style={styles.linkText}>{item}</Text>
             </TouchableOpacity>
           )
         }
