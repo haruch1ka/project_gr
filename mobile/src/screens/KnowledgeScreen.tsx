@@ -1,128 +1,218 @@
 import React, { useState } from 'react';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import {
-  View, Text, TouchableOpacity, StyleSheet,
-  FlatList, Modal, TextInput,
+  View, Text, TouchableOpacity, StyleSheet, ScrollView,
 } from 'react-native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RouteProp } from '@react-navigation/native';
-import { RootStackParamList } from '../../App';
-import { colors, font } from '../constants/theme';
-import { mockKnowledge } from '../constants/mockData';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { colors, font, radius } from '../constants/theme';
+import { mockKnowledge, mockFields } from '../constants/mockData';
+import { Knowledge } from '../types';
 
-type Props = {
-  navigation: NativeStackNavigationProp<RootStackParamList, 'Knowledge'>;
-  route: RouteProp<RootStackParamList, 'Knowledge'>;
+const STATUS_COLOR: Record<Knowledge['status'], string> = {
+  verified:   colors.primary,
+  hypothesis: colors.textSecondary,
+  disproved:  colors.danger,
 };
 
-export default function KnowledgeScreen({ navigation, route }: Props) {
-  const { field } = route.params;
-  const existingCategories = [...new Set(mockKnowledge.filter(k => k.field === field).map(k => k.category))];
-  const [categories, setCategories] = useState<string[]>(existingCategories);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [newName, setNewName] = useState('');
+// 分野タブ
+function FieldTab({ label, icon, count, active, onPress }: {
+  label: string; icon: string; count: number; active: boolean; onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity
+      style={[styles.tab, active && styles.tabActive]}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      <Text style={styles.tabIcon}>{icon}</Text>
+      <Text style={[styles.tabText, active && styles.tabTextActive]}>{label}</Text>
+      <Text style={[styles.tabCount, active && styles.tabCountActive]}>{count}</Text>
+    </TouchableOpacity>
+  );
+}
 
-  function addCategory() {
-    if (!newName.trim()) return;
-    setCategories([...categories, newName.trim()]);
-    setNewName('');
-    setModalVisible(false);
-  }
+// ステータスサマリー
+function StatusSummary({ items }: { items: Knowledge[] }) {
+  const verified  = items.filter(k => k.status === 'verified').length;
+  const hypo      = items.filter(k => k.status === 'hypothesis').length;
+  const disproved = items.filter(k => k.status === 'disproved').length;
+  const total = items.length || 1;
+
+  return (
+    <View style={styles.summaryCard}>
+      <View style={styles.summaryRow}>
+        <View style={styles.summaryItem}>
+          <View style={[styles.summaryDot, { backgroundColor: colors.primary }]} />
+          <Text style={styles.summaryLabel}>検証済</Text>
+          <Text style={styles.summaryNum}>{verified}</Text>
+        </View>
+        <View style={styles.summaryItem}>
+          <View style={[styles.summaryDot, { backgroundColor: colors.textSecondary }]} />
+          <Text style={styles.summaryLabel}>仮説</Text>
+          <Text style={styles.summaryNum}>{hypo}</Text>
+        </View>
+        <View style={styles.summaryItem}>
+          <View style={[styles.summaryDot, { backgroundColor: colors.danger }]} />
+          <Text style={styles.summaryLabel}>反証</Text>
+          <Text style={styles.summaryNum}>{disproved}</Text>
+        </View>
+      </View>
+      {/* 三色バー */}
+      <View style={styles.triBar}>
+        <View style={{ flex: verified,  backgroundColor: colors.primary,       borderRadius: 2 }} />
+        <View style={{ flex: hypo,      backgroundColor: colors.textSecondary, borderRadius: 2 }} />
+        <View style={{ flex: disproved, backgroundColor: colors.danger,        borderRadius: 2 }} />
+        {total === 0 && <View style={{ flex: 1, backgroundColor: colors.border }} />}
+      </View>
+    </View>
+  );
+}
+
+// 知識アイテム
+function KnowledgeItem({ item }: { item: Knowledge }) {
+  const pct   = Math.round(item.confidenceScore * 100);
+  const color = STATUS_COLOR[item.status];
+  return (
+    <View style={styles.item}>
+      {/* 上段：ドット・テキスト・パーセント */}
+      <View style={styles.itemRow}>
+        <View style={[styles.itemDot, { backgroundColor: color }]} />
+        <Text style={[styles.itemText, { color }]} numberOfLines={2}>{item.content}</Text>
+        <Text style={[styles.itemPct, { color }]}>{pct}%</Text>
+      </View>
+      {/* 底面水平バー */}
+      <View style={styles.itemBarTrack}>
+        <View style={[styles.itemBarFill, { width: `${pct}%` as any, backgroundColor: color }]} />
+      </View>
+    </View>
+  );
+}
+
+// カテゴリセクション（折りたたみ）
+function CategorySection({ category, items }: { category: string; items: Knowledge[] }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <View style={styles.section}>
+      <TouchableOpacity
+        style={styles.sectionHeader}
+        onPress={() => setOpen(v => !v)}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.sectionArrow}>{open ? '∨' : '›'}</Text>
+        <Text style={styles.sectionTitle}>{category}</Text>
+        <Text style={styles.sectionCount}>{items.length}</Text>
+      </TouchableOpacity>
+      {open && items.map((item, i) => <KnowledgeItem key={i} item={item} />)}
+    </View>
+  );
+}
+
+export default function KnowledgeScreen() {
+  const allFields = mockFields.map(f => f.name);
+  const [selectedField, setSelectedField] = useState(allFields[0] ?? '釣り');
+
+  const filtered   = mockKnowledge.filter(k => k.field === selectedField);
+  const categories = [...new Set(filtered.map(k => k.category))];
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* ヘッダー */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-          <Text style={styles.back}>←</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>{field}</Text>
-        <View style={styles.actions}>
-          <TouchableOpacity onPress={() => navigation.navigate('Web', { field })}>
-            <Text style={styles.actionIcon}>🔍</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => navigation.navigate('Chat', { field })}>
-            <Text style={styles.actionIcon}>💬</Text>
-          </TouchableOpacity>
-          <TouchableOpacity>
-            <Text style={[styles.actionIcon, styles.actionIconActive]}>📚</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => navigation.navigate('Plan', { field })}>
-            <Text style={styles.actionIcon}>📋</Text>
-          </TouchableOpacity>
-        </View>
+        <Text style={styles.title}>知識ツリー</Text>
+        <Text style={styles.subtitle}>カテゴリ・知識</Text>
       </View>
 
-      <FlatList
-        data={[...categories, '__add__']}
-        keyExtractor={(item) => item}
-        renderItem={({ item }) =>
-          item === '__add__' ? (
-            <TouchableOpacity style={styles.linkItem} onPress={() => setModalVisible(true)}>
-              <Text style={styles.addText}>＋</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              style={styles.linkItem}
-              onPress={() => navigation.navigate('KnowledgeCategory', { field, category: item })}
-              activeOpacity={0.6}
-            >
-              <Text style={styles.linkText}>{item}</Text>
-            </TouchableOpacity>
-          )
-        }
-      />
+      {/* 分野タブ */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.tabsContent}
+      >
+        {mockFields.map(f => (
+          <FieldTab
+            key={f.name}
+            label={f.name}
+            icon={f.icon}
+            count={mockKnowledge.filter(k => k.field === f.name).length}
+            active={selectedField === f.name}
+            onPress={() => setSelectedField(f.name)}
+          />
+        ))}
+      </ScrollView>
 
-      <Modal visible={modalVisible} transparent animationType="slide">
-        <View style={styles.overlay}>
-          <View style={styles.modal}>
-            <Text style={styles.modalTitle}>カテゴリを追加</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="例：タイミング、場所、道具…"
-              placeholderTextColor={colors.textMuted}
-              value={newName}
-              onChangeText={setNewName}
-              autoFocus
-            />
-            <View style={styles.modalActions}>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
-                <Text style={styles.cancelBtn}>キャンセル</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.addBtn} onPress={addCategory}>
-                <Text style={styles.addBtnText}>追加</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <ScrollView contentContainerStyle={styles.scroll}>
+        {/* ステータスサマリー */}
+        <StatusSummary items={filtered} />
+
+        {/* カテゴリ別ツリー */}
+        {categories.map(cat => (
+          <CategorySection
+            key={cat}
+            category={cat}
+            items={filtered.filter(k => k.category === cat)}
+          />
+        ))}
+
+        {filtered.length === 0 && (
+          <Text style={styles.empty}>この分野の知識はまだありません</Text>
+        )}
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
-  header: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 20, paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: colors.border,
+
+  header: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 2 },
+  title:    { fontSize: font.xl, fontWeight: '700', color: colors.text },
+  subtitle: { fontSize: font.xs, color: colors.textMuted, marginTop: 1 },
+
+  tabsContent: { paddingHorizontal: 16, paddingVertical: 8, gap: 6 },
+  tab: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 10, paddingVertical: 5,
+    borderRadius: radius.xl, backgroundColor: colors.bgCard,
+    borderWidth: 1, borderColor: 'transparent',
+    alignSelf: 'flex-start',
   },
-  back: { fontSize: 20, color: colors.text, marginRight: 16 },
-  title: { fontSize: font.lg, fontWeight: '700', flex: 1 },
-  actions: { flexDirection: 'row', gap: 4 },
-  actionIcon: { fontSize: 20, padding: 6, color: colors.text },
-  actionIconActive: { opacity: 0.4 },
-  linkItem: { paddingVertical: 16, paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: colors.border },
-  linkText: { fontSize: 16, color: colors.link, textDecorationLine: 'underline' },
-  addText: { fontSize: 22, color: colors.textMuted },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'flex-end' },
-  modal: { backgroundColor: colors.bg, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, gap: 16 },
-  modalTitle: { fontSize: font.lg, fontWeight: '700' },
-  modalInput: {
-    borderWidth: 1.5, borderColor: colors.borderInput, borderRadius: 12,
-    padding: 14, fontSize: font.md, color: colors.text, backgroundColor: colors.bgInput,
+  tabActive:      { borderColor: colors.primary },
+  tabIcon:        { fontSize: 13 },
+  tabText:        { fontSize: font.sm, color: colors.textMuted, fontWeight: '500' },
+  tabTextActive:  { color: colors.primary, fontWeight: '700' },
+  tabCount:       { fontSize: font.xs, color: colors.textSecondary },
+  tabCountActive: { color: colors.primary },
+
+  scroll: { paddingHorizontal: 16, paddingBottom: 32 },
+
+  summaryCard: {
+    backgroundColor: colors.bgCard, borderRadius: radius.md,
+    padding: 12, marginBottom: 16, gap: 8,
   },
-  modalActions: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 16 },
-  cancelBtn: { fontSize: font.md, color: colors.textMuted },
-  addBtn: { backgroundColor: colors.primary, borderRadius: 10, paddingHorizontal: 20, paddingVertical: 10 },
-  addBtnText: { color: '#fff', fontWeight: '700', fontSize: font.md },
+  summaryRow:   { flexDirection: 'row', gap: 16 },
+  summaryItem:  { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  summaryDot:   { width: 8, height: 8, borderRadius: 4 },
+  summaryLabel: { fontSize: font.xs, color: colors.textMuted },
+  summaryNum:   { fontSize: font.xs, color: colors.text, fontWeight: '600' },
+  triBar:       { flexDirection: 'row', height: 3, borderRadius: 2, gap: 2, overflow: 'hidden' },
+
+  section:       { marginBottom: 12 },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, gap: 6 },
+  sectionArrow:  { fontSize: font.sm, color: colors.textMuted, width: 14 },
+  sectionTitle:  { flex: 1, fontSize: font.sm, fontWeight: '700', color: colors.textSub },
+  sectionCount:  { fontSize: font.xs, color: colors.textMuted },
+
+  item: {
+    backgroundColor: colors.bgCard,
+    borderRadius: radius.md,
+    paddingTop: 10, paddingHorizontal: 12,
+    marginBottom: 4, overflow: 'hidden',
+  },
+  itemRow:      { flexDirection: 'row', alignItems: 'center', gap: 8, paddingBottom: 8 },
+  itemDot:      { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
+  itemText:     { flex: 1, fontSize: font.sm, lineHeight: 18 },
+  itemPct:      { fontSize: font.xs, fontWeight: '700', width: 34, textAlign: 'right' },
+  itemBarTrack: { height: 3, backgroundColor: colors.border },
+  itemBarFill:  { height: 3 },
+
+  empty: { color: colors.textMuted, fontSize: font.sm, textAlign: 'center', marginTop: 40 },
 });

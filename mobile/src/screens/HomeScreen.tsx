@@ -4,11 +4,12 @@ import {
   ScrollView, Modal, TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Svg, { Polyline, Circle, G } from 'react-native-svg';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
 import { colors, font, radius } from '../constants/theme';
-import { mockFields, mockKnowledge } from '../constants/mockData';
+import { mockFields, mockKnowledge, mockExperiences } from '../constants/mockData';
 import { Field } from '../types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -17,6 +18,78 @@ const ICONS = ['🎣', '💪', '📖', '🎸', '🏃', '✍️', '🎨', '🧘',
 
 function StatusDot({ color }: { color: string }) {
   return <View style={[styles.dot, { backgroundColor: color }]} />;
+}
+
+const DONUT_R = 38;
+const DONUT_SIZE = 96;
+const CIRCUMFERENCE = 2 * Math.PI * DONUT_R;
+const CENTER = DONUT_SIZE / 2;
+
+function DonutChart({ verified, hypothesis, disproved, total }: {
+  verified: number; hypothesis: number; disproved: number; total: number;
+}) {
+  const segments = [
+    { value: verified,    color: colors.primary },
+    { value: hypothesis,  color: colors.textSecondary },
+    { value: disproved,   color: colors.danger },
+  ];
+
+  let offset = 0;
+  // -90度から開始（上から描画）
+  const startAngle = -90;
+
+  return (
+    <View style={{ width: DONUT_SIZE, height: DONUT_SIZE, alignItems: 'center', justifyContent: 'center' }}>
+      <Svg width={DONUT_SIZE} height={DONUT_SIZE} style={{ position: 'absolute' }}>
+        {/* 背景トラック */}
+        <Circle
+          cx={CENTER} cy={CENTER} r={DONUT_R}
+          fill="none" stroke={colors.border} strokeWidth={8}
+        />
+        {segments.map((seg, i) => {
+          if (seg.value === 0) { offset += 0; return null; }
+          const len = (seg.value / total) * CIRCUMFERENCE;
+          const dash = `${len} ${CIRCUMFERENCE - len}`;
+          const rotation = startAngle + (offset / total) * 360;
+          offset += seg.value;
+          return (
+            <G key={i} rotation={rotation} origin={`${CENTER}, ${CENTER}`}>
+              <Circle
+                cx={CENTER} cy={CENTER} r={DONUT_R}
+                fill="none"
+                stroke={seg.color}
+                strokeWidth={8}
+                strokeDasharray={dash}
+                strokeLinecap="butt"
+              />
+            </G>
+          );
+        })}
+      </Svg>
+      <Text style={styles.donutCount}>{total}</Text>
+      <Text style={styles.donutLabel}>knowledge</Text>
+    </View>
+  );
+}
+
+// ダミーの確信度推移データ（過去6週）
+const AVG_TREND = [52, 55, 58, 60, 62, 64];
+
+function Sparkline({ data, color, width = 60, height = 28 }: {
+  data: number[]; color: string; width?: number; height?: number;
+}) {
+  const min = Math.min(...data);
+  const max = Math.max(...data) || 1;
+  const points = data.map((v, i) => {
+    const x = (i / (data.length - 1)) * width;
+    const y = height - ((v - min) / (max - min)) * height;
+    return `${x},${y}`;
+  }).join(' ');
+  return (
+    <Svg width={width} height={height}>
+      <Polyline points={points} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
 }
 
 function KnowledgeStatusChart({ fields }: { fields: Field[] }) {
@@ -29,19 +102,14 @@ function KnowledgeStatusChart({ fields }: { fields: Field[] }) {
   const avgScore = Math.round(
     (all.reduce((s, k) => s + k.confidenceScore, 0) / total) * 100
   );
+  const prevScore = AVG_TREND[AVG_TREND.length - 2];
+  const trend = avgScore - prevScore;
 
   return (
     <View style={styles.chartCard}>
       <Text style={styles.chartTitle}>知識の状態（全体）</Text>
       <View style={styles.chartRow}>
-        <View style={styles.donutWrap}>
-          <View style={styles.donutOuter}>
-            <View style={styles.donutInner}>
-              <Text style={styles.donutCount}>{total}</Text>
-              <Text style={styles.donutLabel}>knowledge</Text>
-            </View>
-          </View>
-        </View>
+        <DonutChart verified={verified} hypothesis={hypothesis} disproved={disproved} total={total} />
         <View style={styles.legendWrap}>
           <View style={styles.legendRow}>
             <StatusDot color={colors.primary} />
@@ -65,7 +133,15 @@ function KnowledgeStatusChart({ fields }: { fields: Field[] }) {
       </View>
       <View style={styles.avgRow}>
         <Text style={styles.avgLabel}>平均確信度の推移</Text>
-        <Text style={styles.avgValue}>{avgScore}%</Text>
+        <View style={styles.avgRight}>
+          <Text style={styles.avgValue}>{avgScore}%</Text>
+          <Text style={[styles.avgTrend, { color: trend >= 0 ? colors.primary : colors.danger }]}>
+            {trend >= 0 ? '▲' : '▼'}{Math.abs(trend)}
+          </Text>
+        </View>
+      </View>
+      <View style={styles.sparklineRow}>
+        <Sparkline data={AVG_TREND} color={colors.blue} width={280} height={36} />
       </View>
     </View>
   );
@@ -125,7 +201,15 @@ export default function HomeScreen() {
         {/* 分野カード */}
         <Text style={styles.sectionTitle}>分野</Text>
         {fields.map(field => {
-          const kCount = mockKnowledge.filter(k => k.field === field.name).length;
+          const fieldKnowledge = mockKnowledge.filter(k => k.field === field.name);
+          const kCount = fieldKnowledge.length;
+          const verifiedCount = fieldKnowledge.filter(k => k.status === 'verified').length;
+          const exps = mockExperiences[field.name] ?? [];
+          const lastDate = exps[0]?.date ?? '—';
+          // スパークライン用：各知識の確信度を並べる
+          const sparkData = fieldKnowledge.length >= 2
+            ? fieldKnowledge.map(k => k.confidenceScore * 100)
+            : [0, 30, 50, 60, 70, 80];
           return (
             <TouchableOpacity
               key={field.name}
@@ -136,8 +220,12 @@ export default function HomeScreen() {
               <Text style={styles.fieldIcon}>{field.icon}</Text>
               <View style={styles.fieldBody}>
                 <Text style={styles.fieldName}>{field.name}</Text>
-                <Text style={styles.fieldMeta}>知識 {kCount}</Text>
+                <Text style={styles.fieldMeta}>
+                  知識 {kCount}{'  '}検証 {verifiedCount}{'  '}最終 {lastDate}
+                </Text>
               </View>
+              <Sparkline data={sparkData} color={colors.primary} width={56} height={28} />
+              <Text style={styles.fieldChevron}>›</Text>
             </TouchableOpacity>
           );
         })}
@@ -189,7 +277,7 @@ export default function HomeScreen() {
           </View>
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -223,13 +311,6 @@ const styles = StyleSheet.create({
   },
   chartTitle: { fontSize: font.sm, color: colors.textMuted, marginBottom: 12 },
   chartRow: { flexDirection: 'row', alignItems: 'center', gap: 16 },
-  donutWrap: { alignItems: 'center', justifyContent: 'center' },
-  donutOuter: {
-    width: 90, height: 90, borderRadius: 45,
-    borderWidth: 8, borderColor: colors.primary,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  donutInner: { alignItems: 'center' },
   donutCount: { fontSize: font.lg, fontWeight: '700', color: colors.text },
   donutLabel: { fontSize: 9, color: colors.textMuted },
   legendWrap: { flex: 1, gap: 8 },
@@ -238,9 +319,12 @@ const styles = StyleSheet.create({
   legendText: { flex: 1, fontSize: font.sm, color: colors.textSub },
   legendNum: { fontSize: font.sm, color: colors.text, fontWeight: '600', width: 20, textAlign: 'right' },
   legendPct: { fontSize: font.xs, color: colors.textMuted, width: 30, textAlign: 'right' },
-  avgRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border },
+  avgRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border },
   avgLabel: { fontSize: font.sm, color: colors.textMuted },
+  avgRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   avgValue: { fontSize: font.sm, color: colors.primary, fontWeight: '600' },
+  avgTrend: { fontSize: font.xs, fontWeight: '600' },
+  sparklineRow: { marginTop: 8, alignItems: 'center' },
 
   sectionTitle: { fontSize: font.md, fontWeight: '700', color: colors.text, marginBottom: 10 },
   fieldCard: {
@@ -251,7 +335,8 @@ const styles = StyleSheet.create({
   fieldIcon: { fontSize: 28 },
   fieldBody: { flex: 1 },
   fieldName: { fontSize: font.md, fontWeight: '600', color: colors.text },
-  fieldMeta: { fontSize: font.xs, color: colors.textMuted, marginTop: 2 },
+  fieldMeta: { fontSize: font.xs, color: colors.textMuted, marginTop: 3 },
+  fieldChevron: { fontSize: 22, color: colors.textSecondary, marginLeft: 4 },
 
   addFieldBtn: {
     alignItems: 'center', paddingVertical: 14,
