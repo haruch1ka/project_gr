@@ -39,7 +39,7 @@ export type RootStackParamList = {
   KnowledgeCategory: { field: string; category: string };
   KnowledgeItem:     { field: string; category: string; item: string };
   Web:               { field: string };
-  QuickLog:          { field?: string };
+  QuickLog:          { field?: string; fields?: { name: string; icon: string }[] };
   Settings:          undefined;
 };
 
@@ -76,7 +76,7 @@ function TabIcon({ name, focused }: { name: string; focused: boolean }) {
 }
 
 function FieldTabBar({ state, navigation }: any) {
-  const { activeField } = useField();
+  const { activeField, fields } = useField();
   return (
     <View style={tabStyles.bar}>
       {state.routes.map((route: any, index: number) => {
@@ -88,7 +88,7 @@ function FieldTabBar({ state, navigation }: any) {
             <TouchableOpacity
               key={route.key}
               style={tabStyles.centerWrap}
-              onPress={() => navigation.getParent()?.navigate('QuickLog', { field: activeField })}
+              onPress={() => navigation.getParent()?.navigate('QuickLog', { field: activeField, fields })}
               activeOpacity={0.8}
             >
               <View style={tabStyles.centerBtn}>
@@ -177,7 +177,7 @@ export default function App() {
           <Stack.Screen
             name="QuickLog"
             component={QuickLogScreen}
-            options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+            options={{ presentation: 'transparentModal', animation: 'slide_from_bottom' }}
           />
           <Stack.Screen name="Settings" component={SettingsScreen} />
         </Stack.Navigator>

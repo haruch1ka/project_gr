@@ -31,6 +31,14 @@ export async function saveGeminiKey(apiKey: string) {
   await SecureStore.setItemAsync('GEMINI_API_KEY', apiKey);
 }
 
+export async function getGeminiKey(): Promise<string | null> {
+  return SecureStore.getItemAsync('GEMINI_API_KEY');
+}
+
+export async function clearGeminiKey() {
+  await SecureStore.deleteItemAsync('GEMINI_API_KEY');
+}
+
 // ─── 構造化JSON出力 ──────────────────────────────────────────────────────
 
 async function chatJSON<T>(prompt: string, context?: string): Promise<T> {

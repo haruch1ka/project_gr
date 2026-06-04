@@ -166,8 +166,8 @@ export default function ChatScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <Text style={styles.screenTitle}>対話</Text>
         {/* メッセージリスト */}
         <FlatList

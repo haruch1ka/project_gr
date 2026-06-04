@@ -1,11 +1,13 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator,
+  Animated, PanResponder,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, font, radius } from '../constants/theme';
+import { TrashIcon } from 'react-native-heroicons/outline';
 import { knowledgeApi } from '../services/api';
 import { Knowledge } from '../types';
 import { RootStackParamList } from '../../App';
@@ -49,25 +51,67 @@ function StatusSummary({ items }: { items: Knowledge[] }) {
   );
 }
 
-function KnowledgeItem({ item }: { item: Knowledge }) {
+const DELETE_BTN_W = 72;
+
+function KnowledgeItem({ item, onDelete }: { item: Knowledge; onDelete: (id: string) => void }) {
+  const translateX  = useRef(new Animated.Value(0)).current;
+  const startX      = useRef(0);
+  const revealedRef = useRef(false);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gs) =>
+        Math.abs(gs.dx) > 8 && Math.abs(gs.dx) > Math.abs(gs.dy),
+      onPanResponderGrant: () => {
+        startX.current = revealedRef.current ? -DELETE_BTN_W : 0;
+        translateX.stopAnimation();
+      },
+      onPanResponderMove: (_, gs) => {
+        translateX.setValue(Math.min(0, Math.max(-DELETE_BTN_W, startX.current + gs.dx)));
+      },
+      onPanResponderRelease: (_, gs) => {
+        const x    = Math.min(0, Math.max(-DELETE_BTN_W, startX.current + gs.dx));
+        const open = x < -(DELETE_BTN_W / 2);
+        revealedRef.current = open;
+        Animated.spring(translateX, { toValue: open ? -DELETE_BTN_W : 0, useNativeDriver: true, bounciness: 0 }).start();
+      },
+    })
+  ).current;
+
+  const handleDelete = () => {
+    if (!item._id) return;
+    Animated.timing(translateX, { toValue: -500, duration: 180, useNativeDriver: true }).start(async () => {
+      try { await knowledgeApi.delete(item._id!); } catch {}
+      onDelete(item._id!);
+    });
+  };
+
   const pct   = Math.round(item.confidenceScore * 100);
   const color = STATUS_COLOR[item.status];
+
   return (
-    <View style={styles.item}>
-      <View style={styles.itemRow}>
-        <View style={[styles.itemDot, { backgroundColor: color }]} />
-        <Text style={[styles.itemText, { color }]} numberOfLines={2}>{item.content}</Text>
-        <Text style={[styles.itemPct, { color }]}>{pct}%</Text>
+    <View style={styles.swipeContainer}>
+      <View style={styles.deleteAction}>
+        <TouchableOpacity onPress={handleDelete} style={styles.deleteBtn} activeOpacity={0.75}>
+          <TrashIcon size={20} color="#fff" strokeWidth={2} />
+        </TouchableOpacity>
       </View>
-      <View style={styles.itemBarTrack}>
-        <View style={[styles.itemBarFill, { width: `${pct}%` as any, backgroundColor: color }]} />
-      </View>
+      <Animated.View style={[styles.item, { transform: [{ translateX }] }]} {...panResponder.panHandlers}>
+        <View style={styles.itemRow}>
+          <View style={[styles.itemDot, { backgroundColor: color }]} />
+          <Text style={[styles.itemText, { color }]} numberOfLines={2}>{item.content}</Text>
+          <Text style={[styles.itemPct, { color }]}>{pct}%</Text>
+        </View>
+        <View style={styles.itemBarTrack}>
+          <View style={[styles.itemBarFill, { width: `${pct}%` as any, backgroundColor: color }]} />
+        </View>
+      </Animated.View>
     </View>
   );
 }
 
-function CategorySection({ category, items, onNavigate }: {
-  category: string; items: Knowledge[]; onNavigate: () => void;
+function CategorySection({ category, items, onDelete, onNavigate }: {
+  category: string; items: Knowledge[]; onDelete: (id: string) => void; onNavigate: () => void;
 }) {
   const [open, setOpen] = useState(true);
   return (
@@ -81,7 +125,9 @@ function CategorySection({ category, items, onNavigate }: {
         <Text style={styles.sectionTitle}>{category}</Text>
         <Text style={styles.sectionCount}>{items.length}</Text>
       </TouchableOpacity>
-      {open && items.map((item, i) => <KnowledgeItem key={item._id ?? i} item={item} />)}
+      {open && items.map((item, i) => (
+        <KnowledgeItem key={item._id ?? i} item={item} onDelete={onDelete} />
+      ))}
     </View>
   );
 }
@@ -92,6 +138,10 @@ export default function KnowledgeScreen() {
 
   const [knowledge, setKnowledge] = useState<Knowledge[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const handleDelete = useCallback((id: string) => {
+    setKnowledge(prev => prev.filter(k => k._id !== id));
+  }, []);
 
   const fetch = useCallback(async () => {
     setLoading(true);
@@ -123,6 +173,7 @@ export default function KnowledgeScreen() {
               key={cat}
               category={cat}
               items={knowledge.filter(k => k.category === cat)}
+              onDelete={handleDelete}
               onNavigate={() => navigation.navigate('KnowledgeCategory', { field, category: cat })}
             />
           ))}
@@ -166,10 +217,23 @@ const styles = StyleSheet.create({
   sectionTitle:  { flex: 1, fontSize: font.sm, fontWeight: '700', color: colors.textSub },
   sectionCount:  { fontSize: font.xs, color: colors.textMuted },
 
+  swipeContainer: {
+    marginBottom: 4, borderRadius: radius.md, overflow: 'hidden',
+  },
+  deleteAction: {
+    position: 'absolute', right: 0, top: 0, bottom: 0, width: DELETE_BTN_W,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  deleteBtn: {
+    backgroundColor: colors.danger,
+    borderRadius: radius.md,
+    padding: 10,
+    justifyContent: 'center', alignItems: 'center',
+  },
+
   item: {
     backgroundColor: colors.bgCard, borderRadius: radius.md,
-    paddingTop: 10, paddingHorizontal: 12,
-    marginBottom: 4, overflow: 'hidden',
+    paddingTop: 10, paddingHorizontal: 12, overflow: 'hidden',
   },
   itemRow:      { flexDirection: 'row', alignItems: 'center', gap: 8, paddingBottom: 8 },
   itemDot:      { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },

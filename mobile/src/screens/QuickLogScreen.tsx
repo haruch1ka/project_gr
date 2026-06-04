@@ -1,43 +1,29 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform,
+  ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView,
 } from 'react-native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
 import { colors, font, radius } from '../constants/theme';
-import { experienceApi, knowledgeApi } from '../services/api';
+import { experienceApi } from '../services/api';
 import { updateKnowledgeFromExperience } from '../services/gemini';
-import { XMarkIcon } from 'react-native-heroicons/outline';
+import { XMarkIcon, PaperAirplaneIcon } from 'react-native-heroicons/outline';
+import { mockFields } from '../constants/mockData';
 
-const FIELD_ICONS: Record<string, string> = {
-  釣り: '🎣', 筋トレ: '💪', 読書: '📖', 料理: '🍳', 音楽: '🎵',
-  英語: '🌍', ゴルフ: '⛳', ランニング: '🏃',
-};
+type Field = { name: string; icon: string };
+type Props = NativeStackScreenProps<RootStackParamList, 'QuickLog'>;
 
-type Props = {
-  navigation: NativeStackNavigationProp<RootStackParamList, 'QuickLog'>;
-};
+export default function QuickLogScreen({ navigation, route }: Props) {
+  const insets = useSafeAreaInsets();
+  const routeFields = route.params?.fields ?? mockFields;
+  const initialField = route.params?.field ?? routeFields[0]?.name ?? '';
 
-export default function QuickLogScreen({ navigation }: Props) {
-  const [fields, setFields] = useState<string[]>([]);
-  const [selectedField, setSelectedField] = useState('');
-  const [memo, setMemo] = useState('');
+  const [fields]         = useState<Field[]>(routeFields);
+  const [selectedField, setSelectedField] = useState(initialField);
+  const [memo, setMemo]  = useState('');
   const [saving, setSaving] = useState(false);
-
-  const fetchFields = useCallback(async () => {
-    try {
-      const data = await knowledgeApi.list();
-      const unique = [...new Set(data.map(k => k.field))];
-      setFields(unique);
-      if (unique.length > 0) setSelectedField(unique[0]);
-    } catch (e) {
-      console.error(e);
-    }
-  }, []);
-
-  useEffect(() => { fetchFields(); }, [fetchFields]);
 
   async function save() {
     if (!memo.trim() || !selectedField || saving) return;
@@ -46,7 +32,6 @@ export default function QuickLogScreen({ navigation }: Props) {
     const date = `${today.getMonth() + 1}/${today.getDate()}`;
     try {
       await experienceApi.create({ field: selectedField, date, memo: memo.trim() });
-      // 保存後、非同期で知識の確信度を更新（UIをブロックしない）
       updateKnowledgeFromExperience(selectedField, memo.trim()).catch(console.error);
       navigation.goBack();
     } catch (e) {
@@ -56,112 +41,166 @@ export default function QuickLogScreen({ navigation }: Props) {
     }
   }
 
+  const canSave = !!memo.trim() && !!selectedField && !saving;
+
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1 }}
+      style={styles.wrapper}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <SafeAreaView style={styles.container}>
-        {/* ハンドル */}
-        <View style={styles.handle} />
+      {/* 外側タップで閉じる */}
+      <Pressable style={StyleSheet.absoluteFill} onPress={() => navigation.goBack()} />
 
-        {/* ヘッダー */}
+      {/* モーダルカード */}
+      <View style={[styles.card, { paddingBottom: insets.bottom }]}>
+
+        {/* ── ヘッダー（分野タブ + 閉じるボタン） ── */}
         <View style={styles.header}>
-          <Text style={styles.title}>記録を残す</Text>
-          <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-            <XMarkIcon size={22} color={colors.textMuted} strokeWidth={2} />
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.tabRow}
+          >
+            {fields.map(f => {
+              const active = f.name === selectedField;
+              return (
+                <TouchableOpacity
+                  key={f.name}
+                  style={[styles.tab, active && styles.tabActive]}
+                  onPress={() => setSelectedField(f.name)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.tabIcon}>{f.icon}</Text>
+                  <Text style={[styles.tabText, active && styles.tabTextActive]}>{f.name}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.7}
+            style={styles.closeBtn}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <XMarkIcon size={20} color={colors.textMuted} strokeWidth={2} />
           </TouchableOpacity>
         </View>
 
-        <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-          {/* 分野選択 */}
-          <Text style={styles.label}>分野</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.fieldRow}>
-            {fields.map(f => (
-              <TouchableOpacity
-                key={f}
-                style={[styles.fieldChip, selectedField === f && styles.fieldChipActive]}
-                onPress={() => setSelectedField(f)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.fieldChipIcon}>{FIELD_ICONS[f] ?? '📌'}</Text>
-                <Text style={[styles.fieldChipText, selectedField === f && styles.fieldChipTextActive]}>{f}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+        {/* ── メモ入力 ── */}
+        <TextInput
+          style={styles.input}
+          multiline
+          autoFocus
+          placeholder="今日の経験を一言で…"
+          placeholderTextColor={colors.textSecondary}
+          value={memo}
+          onChangeText={setMemo}
+          textAlignVertical="top"
+        />
 
-          {/* メモ入力 */}
-          <Text style={styles.label}>メモ</Text>
-          <TextInput
-            style={styles.input}
-            multiline
-            autoFocus
-            placeholder="今日の気づき、結果、次に試したいことなど…"
-            placeholderTextColor={colors.textMuted}
-            value={memo}
-            onChangeText={setMemo}
-            textAlignVertical="top"
-          />
-
-          {/* 保存ボタン */}
+        {/* ── ボトムバー ── */}
+        <View style={styles.bottomBar}>
+          <Text style={styles.hintText}>一言 → AIが構造化 → 確認</Text>
           <TouchableOpacity
-            style={[styles.saveBtn, (!memo.trim() || !selectedField || saving) && styles.saveBtnDisabled]}
+            style={[styles.recordBtn, !canSave && styles.recordBtnDisabled]}
             onPress={save}
-            disabled={!memo.trim() || !selectedField || saving}
+            disabled={!canSave}
+            activeOpacity={0.8}
           >
-            {saving
-              ? <ActivityIndicator color="#fff" />
-              : <Text style={styles.saveBtnText}>保存する</Text>
-            }
+            {saving ? (
+              <ActivityIndicator size="small" color="#000" />
+            ) : (
+              <>
+                <PaperAirplaneIcon size={14} color="#000" strokeWidth={2.5} />
+                <Text style={styles.recordBtnText}>記録</Text>
+              </>
+            )}
           </TouchableOpacity>
-        </ScrollView>
-      </SafeAreaView>
+        </View>
+
+      </View>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-
-  handle: {
-    width: 40, height: 4, borderRadius: 2,
-    backgroundColor: colors.border,
-    alignSelf: 'center', marginTop: 10, marginBottom: 4,
+  wrapper: {
+    flex: 1,
+    justifyContent: 'flex-end',
   },
 
+  card: {
+    backgroundColor: colors.bgCard,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    overflow: 'hidden',
+  },
+
+  // ── ヘッダー ──
   header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingRight: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
-  title:    { fontSize: font.lg, fontWeight: '700', color: colors.text },
-  closeBtn: { fontSize: 18, color: colors.textMuted, padding: 4 },
-
-  body: { paddingHorizontal: 20, paddingBottom: 40, gap: 12 },
-
-  label: { fontSize: font.xs, color: colors.textMuted, fontWeight: '600', letterSpacing: 0.5 },
-
-  fieldRow: { gap: 8, paddingBottom: 4 },
-  fieldChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingHorizontal: 12, paddingVertical: 7,
-    borderRadius: radius.xl, borderWidth: 1.5,
-    borderColor: colors.border, backgroundColor: colors.bgCard,
+  tabRow: {
+    flexDirection: 'row',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
-  fieldChipActive:     { borderColor: colors.primary, backgroundColor: colors.bgInput },
-  fieldChipIcon:       { fontSize: 14 },
-  fieldChipText:       { fontSize: font.sm, color: colors.textMuted, fontWeight: '500' },
-  fieldChipTextActive: { color: colors.primary, fontWeight: '700' },
+  tab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: radius.xl,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.bgDeep,
+  },
+  tabActive: {
+    borderColor: colors.blue,
+    backgroundColor: '#0d1e40',
+  },
+  tabIcon:       { fontSize: 14 },
+  tabText:       { fontSize: font.sm, color: colors.textMuted, fontWeight: '500' },
+  tabTextActive: { color: colors.blue, fontWeight: '700' },
+  closeBtn:      { padding: 4, marginLeft: 4 },
 
+  // ── 入力 ──
   input: {
-    borderWidth: 1.5, borderColor: colors.borderInput, borderRadius: radius.md,
-    padding: 14, fontSize: font.md, height: 140,
-    backgroundColor: colors.bgInput, color: colors.text,
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 16,
+    fontSize: font.md,
+    color: colors.text,
+    lineHeight: 26,
+    minHeight: 80,
   },
 
-  saveBtn: {
-    backgroundColor: colors.primary, borderRadius: radius.md,
-    padding: 16, alignItems: 'center',
+  // ── ボトムバー ──
+  bottomBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
   },
-  saveBtnDisabled: { backgroundColor: '#c0cdff' },
-  saveBtnText:     { color: '#fff', fontSize: font.md, fontWeight: '700' },
+  hintText:          { fontSize: font.xs, color: colors.textSecondary },
+  recordBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: colors.primary,
+    borderRadius: radius.xl,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+  },
+  recordBtnDisabled: { opacity: 0.4 },
+  recordBtnText:     { fontSize: font.sm, color: '#000', fontWeight: '700' },
 });
