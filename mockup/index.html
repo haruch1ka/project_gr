@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>project_gr モック</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="phone">
+
+  <!-- ══════════════════════════════════
+       ホーム画面
+  ══════════════════════════════════ -->
+  <div class="screen active" id="home">
+    <div class="header">
+      <div class="header-title">上達ノート</div>
+    </div>
+    <div class="fields-grid">
+      <div class="field-card" onclick="goTo('record')">
+        <div class="field-icon">🎣</div>
+        <div class="field-name">釣り</div>
+      </div>
+      <div class="field-card" onclick="goTo('record')">
+        <div class="field-icon">💪</div>
+        <div class="field-name">筋トレ</div>
+      </div>
+      <div class="field-card" onclick="goTo('record')">
+        <div class="field-icon">📖</div>
+        <div class="field-name">読書</div>
+      </div>
+      <div class="field-card add-card">
+        <div class="add-plus">＋</div>
+        <div class="add-label">追加</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════
+       記録画面
+  ══════════════════════════════════ -->
+  <div class="screen" id="record">
+    <div class="header">
+      <button class="btn-back" onclick="goTo('home')">←</button>
+      <div class="header-title">釣り</div>
+      <div class="header-actions">
+        <button class="btn-icon" onclick="goTo('web')">🔍</button>
+        <button class="btn-icon" onclick="goTo('chat')">💬</button>
+        <button class="btn-icon" onclick="goTo('knowledge')">📚</button>
+        <button class="btn-icon" onclick="goTo('plan')">📋</button>
+      </div>
+    </div>
+
+    <div class="recent-logs">
+      <div class="recent-logs-title">最近の記録</div>
+      <div class="log-item">
+        <span class="log-date">6/3</span>
+        <span class="log-text">朝マズメ、大物バラした。タモを先に準備すべきだった</span>
+      </div>
+      <div class="log-item">
+        <span class="log-date">6/2</span>
+        <span class="log-text">夕マズメ、アジ連続ヒット。レンジ中層が正解だった</span>
+      </div>
+      <div class="log-item">
+        <span class="log-date">6/1</span>
+        <span class="log-text">風強すぎて釣りにならず。早上がり</span>
+      </div>
+      <div class="log-item">
+        <span class="log-date">5/30</span>
+        <span class="log-text">新しいルアー試したが反応なし。カラーを変えてみる</span>
+      </div>
+    </div>
+
+    <div class="record-form">
+      <div>
+        <div class="form-label">メモ</div>
+        <textarea class="memo-input" id="memoInput" placeholder="今日の気づき、結果、次に試したいことなど…"></textarea>
+      </div>
+      <button class="btn-save" onclick="saveRecord()">保存する</button>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════
+       知識画面
+  ══════════════════════════════════ -->
+  <div class="screen" id="knowledge">
+    <div class="header">
+      <button class="btn-back" onclick="goTo('home')">←</button>
+      <div class="header-title">釣り</div>
+      <div class="header-actions">
+        <button class="btn-icon" onclick="goTo('web')">🔍</button>
+        <button class="btn-icon" onclick="goTo('chat')">💬</button>
+        <button class="btn-icon active" onclick="goTo('knowledge')">📚</button>
+        <button class="btn-icon" onclick="goTo('plan')">📋</button>
+      </div>
+    </div>
+
+    <div class="knowledge-list">
+
+      <div class="k-item">
+        <div class="k-header" onclick="toggleK(this)">
+          <span class="k-toggle">▶</span>
+          <div class="k-content">
+            <span class="k-text">朝マズメは中層レンジが釣れやすい</span>
+            <span class="k-badge badge-hypothesis">仮説</span>
+          </div>
+        </div>
+        <div class="k-children">
+          <div class="k-child-group">
+            <div class="k-child-label">裏付けた経験</div>
+            <div class="k-child-item"><span class="k-child-dot">·</span> 6/2　アジ連続ヒット、中層で反応</div>
+            <div class="k-child-item"><span class="k-child-dot">·</span> 5/28　サバ5匹、同条件</div>
+          </div>
+          <div class="k-child-group">
+            <div class="k-child-label">Web情報</div>
+            <div class="k-child-item"><span class="k-child-dot">·</span> アジングの棚取り：朝は中層〜表層が基本</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="k-item">
+        <div class="k-header" onclick="toggleK(this)">
+          <span class="k-toggle">▶</span>
+          <div class="k-content">
+            <span class="k-text">タモは釣り始め前に準備しておく</span>
+            <span class="k-badge badge-hypothesis">仮説</span>
+          </div>
+        </div>
+        <div class="k-children">
+          <div class="k-child-group">
+            <div class="k-child-label">裏付けた経験</div>
+            <div class="k-child-item"><span class="k-child-dot">·</span> 6/3　大物バラした、タモ準備が遅かった</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="k-item">
+        <div class="k-header" onclick="toggleK(this)">
+          <span class="k-toggle">▶</span>
+          <div class="k-content">
+            <span class="k-text">風速5m以上は釣りにならない</span>
+            <span class="k-badge badge-verified">検証済み</span>
+          </div>
+        </div>
+        <div class="k-children">
+          <div class="k-child-group">
+            <div class="k-child-label">裏付けた経験</div>
+            <div class="k-child-item"><span class="k-child-dot">·</span> 6/1　風強くて早上がり</div>
+            <div class="k-child-item"><span class="k-child-dot">·</span> 5/20　同条件で釣果ゼロ</div>
+            <div class="k-child-item"><span class="k-child-dot">·</span> 5/10　強風で仕掛けが安定しなかった</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="k-item">
+        <div class="k-header" onclick="toggleK(this)">
+          <span class="k-toggle">▶</span>
+          <div class="k-content">
+            <span class="k-text">夕マズメより朝マズメの方が釣れる</span>
+            <span class="k-badge badge-disproved">反証済み</span>
+          </div>
+        </div>
+        <div class="k-children">
+          <div class="k-child-group">
+            <div class="k-child-label">反例になった経験</div>
+            <div class="k-child-item"><span class="k-child-dot">·</span> 6/2　夕マズメの方が釣果が多かった</div>
+            <div class="k-child-item"><span class="k-child-dot">·</span> 5/25　夕マズメで大物ヒット</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="k-add">
+        <span>＋</span> 知識を追加
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════
+       AI対話画面（プレースホルダー）
+  ══════════════════════════════════ -->
+  <div class="screen" id="chat">
+    <div class="header">
+      <button class="btn-back" onclick="goTo('home')">←</button>
+      <div class="header-title">釣り</div>
+      <div class="header-actions">
+        <button class="btn-icon" onclick="goTo('web')">🔍</button>
+        <button class="btn-icon active" onclick="goTo('chat')">💬</button>
+        <button class="btn-icon" onclick="goTo('knowledge')">📚</button>
+        <button class="btn-icon" onclick="goTo('plan')">📋</button>
+      </div>
+    </div>
+    <div class="placeholder">
+      <div class="placeholder-icon">💬</div>
+      <div class="placeholder-text">AI対話</div>
+      <div class="placeholder-sub">経験と知識を文脈にAIと対話する</div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════
+       Web収集画面（プレースホルダー）
+  ══════════════════════════════════ -->
+  <div class="screen" id="web">
+    <div class="header">
+      <button class="btn-back" onclick="goTo('home')">←</button>
+      <div class="header-title">釣り</div>
+      <div class="header-actions">
+        <button class="btn-icon active" onclick="goTo('web')">🔍</button>
+        <button class="btn-icon" onclick="goTo('chat')">💬</button>
+        <button class="btn-icon" onclick="goTo('knowledge')">📚</button>
+        <button class="btn-icon" onclick="goTo('plan')">📋</button>
+      </div>
+    </div>
+    <div class="placeholder">
+      <div class="placeholder-icon">🔍</div>
+      <div class="placeholder-text">Web情報収集</div>
+      <div class="placeholder-sub">Web情報を仮説として知識プールへ投入する</div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════
+       プラン画面（プレースホルダー）
+  ══════════════════════════════════ -->
+  <div class="screen" id="plan">
+    <div class="header">
+      <button class="btn-back" onclick="goTo('home')">←</button>
+      <div class="header-title">釣り</div>
+      <div class="header-actions">
+        <button class="btn-icon" onclick="goTo('web')">🔍</button>
+        <button class="btn-icon" onclick="goTo('chat')">💬</button>
+        <button class="btn-icon" onclick="goTo('knowledge')">📚</button>
+        <button class="btn-icon active" onclick="goTo('plan')">📋</button>
+      </div>
+    </div>
+    <div class="placeholder">
+      <div class="placeholder-icon">📋</div>
+      <div class="placeholder-text">行動プラン</div>
+      <div class="placeholder-sub">AI対話から生成された次の行動プラン</div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast">保存しました</div>
+
+</div>
+<script src="js/app.js"></script>
+</body>
+</html>
