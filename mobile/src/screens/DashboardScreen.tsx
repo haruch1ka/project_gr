@@ -66,51 +66,12 @@ function FieldTabs() {
 const ft = StyleSheet.create({
   row:       { paddingHorizontal: 16, paddingVertical: 10, gap: 8, alignItems: 'center' },
   chip:      { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, backgroundColor: colors.bgCard, borderWidth: 1.5, borderColor: colors.border },
-  chipActive:{ borderColor: colors.primary, backgroundColor: '#0d2a1f' },
+  chipActive:{ borderColor: colors.blue, backgroundColor: '#0d1e40' },
   icon:      { fontSize: 14 },
   label:     { fontSize: font.sm, color: colors.textMuted, fontWeight: '500' },
-  labelActive:{ color: colors.primary, fontWeight: '700' },
+  labelActive:{ color: colors.blue, fontWeight: '700' },
 });
 
-function KnowledgeStatus({ items }: { items: Knowledge[] }) {
-  const verified  = items.filter(k => k.status === 'verified').length;
-  const hypo      = items.filter(k => k.status === 'hypothesis').length;
-  const disproved = items.filter(k => k.status === 'disproved').length;
-  const total     = items.length || 1;
-  return (
-    <View style={ks.card}>
-      <Text style={ks.title}>知識の状態</Text>
-      <View style={ks.row}>
-        {[
-          { label: '検証済', count: verified,  color: colors.primary },
-          { label: '仮説',   count: hypo,      color: colors.textSecondary },
-          { label: '反証',   count: disproved, color: colors.danger },
-        ].map(({ label, count, color }) => (
-          <View key={label} style={ks.item}>
-            <Text style={[ks.count, { color }]}>{count}</Text>
-            <Text style={ks.itemLabel}>{label}</Text>
-          </View>
-        ))}
-      </View>
-      <View style={ks.bar}>
-        {verified  > 0 && <View style={{ flex: verified,  backgroundColor: colors.primary,       borderRadius: 2 }} />}
-        {hypo      > 0 && <View style={{ flex: hypo,      backgroundColor: colors.textSecondary, borderRadius: 2 }} />}
-        {disproved > 0 && <View style={{ flex: disproved, backgroundColor: colors.danger,        borderRadius: 2 }} />}
-        {total     === 0 && <View style={{ flex: 1, backgroundColor: colors.border }} />}
-      </View>
-    </View>
-  );
-}
-
-const ks = StyleSheet.create({
-  card:      { backgroundColor: colors.bgCard, borderRadius: radius.md, padding: 14, gap: 10 },
-  title:     { fontSize: font.xs, color: colors.textMuted, fontWeight: '600', letterSpacing: 0.5 },
-  row:       { flexDirection: 'row', gap: 0 },
-  item:      { flex: 1, alignItems: 'center', gap: 2 },
-  count:     { fontSize: font.xl, fontWeight: '700' },
-  itemLabel: { fontSize: font.xs, color: colors.textMuted },
-  bar:       { flexDirection: 'row', height: 4, borderRadius: 2, gap: 2, overflow: 'hidden' },
-});
 
 function SurveyCard({ field }: { field: string }) {
   const q = SURVEY_Q[field];
@@ -205,9 +166,6 @@ export default function DashboardScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>
-
-        {/* 知識の状態 */}
-        <KnowledgeStatus items={knowledge} />
 
         {/* アンケート */}
         <SurveyCard key={activeField} field={activeField} />

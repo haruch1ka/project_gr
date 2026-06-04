@@ -66,7 +66,7 @@ const TAB_LABELS: Record<string, string> = {
 };
 
 function TabIcon({ name, focused }: { name: string; focused: boolean }) {
-  const color = focused ? colors.primary : colors.textSecondary;
+  const color = focused ? colors.blue : colors.textSecondary;
   const p = { size: 24, color, strokeWidth: focused ? 2 : 1.5 };
   if (name === 'Dashboard') return focused ? <HomeIconSolid {...p} /> : <HomeIcon {...p} />;
   if (name === 'Knowledge') return focused ? <BookOpenIconSolid {...p} /> : <BookOpenIcon {...p} />;
@@ -127,14 +127,14 @@ const tabStyles = StyleSheet.create({
   },
   tab:          { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 3 },
   label:        { fontSize: 10, color: colors.textSecondary },
-  labelFocused: { color: colors.primary },
+  labelFocused: { color: colors.blue },
   centerWrap:   { flex: 1, alignItems: 'center', justifyContent: 'center' },
   centerBtn: {
     width: 52, height: 52, borderRadius: 14,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.blue,
     alignItems: 'center', justifyContent: 'center',
     marginBottom: 14,
-    shadowColor: colors.primary, shadowOffset: { width: 0, height: 4 },
+    shadowColor: colors.blue, shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.5, shadowRadius: 10, elevation: 10,
   },
 });
