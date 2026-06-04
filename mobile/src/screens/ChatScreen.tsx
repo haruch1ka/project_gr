@@ -4,8 +4,9 @@ import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   FlatList, KeyboardAvoidingView, Platform, ActivityIndicator,
 } from 'react-native';
-import { useRoute, RouteProp } from '@react-navigation/native';
-import { TabParamList } from '../../App';
+import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { TabParamList, RootStackParamList } from '../../App';
 import { colors, font, radius } from '../constants/theme';
 import { ChatMessage } from '../types';
 import { chat } from '../services/gemini';
@@ -48,6 +49,7 @@ ${experiencePart}
 
 export default function ChatScreen() {
   const route = useRoute<ChatRoute>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const routeField = route.params?.field ?? null;
 
   const [selectedField, setSelectedField] = useState<string | null>(routeField);
@@ -134,7 +136,14 @@ export default function ChatScreen() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {/* ヘッダー */}
         <View style={styles.header}>
-          {routeField == null && (
+          {routeField != null ? (
+            <TouchableOpacity
+              onPress={() => navigation.navigate('Dashboard', { field: routeField })}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Text style={styles.back}>←</Text>
+            </TouchableOpacity>
+          ) : (
             <TouchableOpacity
               onPress={() => setSelectedField(null)}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}

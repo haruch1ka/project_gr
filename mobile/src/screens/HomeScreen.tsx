@@ -172,7 +172,7 @@ export default function HomeScreen() {
         {/* ヘッダー */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.greeting}>こんにちは</Text>
+            <Text style={styles.greeting}>project gr</Text>
             <Text style={styles.date}>{today}</Text>
           </View>
         </View>
@@ -214,7 +214,7 @@ export default function HomeScreen() {
             <TouchableOpacity
               key={field.name}
               style={styles.fieldCard}
-              onPress={() => navigation.navigate('Record', { field: field.name })}
+              onPress={() => navigation.navigate('Dashboard', { field: field.name })}
               activeOpacity={0.7}
             >
               <Text style={styles.fieldIcon}>{field.icon}</Text>

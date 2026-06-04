@@ -1,15 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  FlatList, Modal, TextInput,
+  FlatList, Modal, TextInput, ActivityIndicator,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../../App';
 import { colors, font } from '../constants/theme';
-import { mockKnowledge } from '../constants/mockData';
+import { knowledgeApi } from '../services/api';
 import { Knowledge } from '../types';
+import { ArrowLeftIcon } from 'react-native-heroicons/outline';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'KnowledgeCategory'>;
@@ -18,50 +19,77 @@ type Props = {
 
 export default function KnowledgeCategoryScreen({ navigation, route }: Props) {
   const { field, category } = route.params;
-  const existing = mockKnowledge.filter(k => k.field === field && k.category === category);
-  const [items, setItems] = useState<Knowledge[]>(existing);
+  const [items, setItems] = useState<Knowledge[]>([]);
+  const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [newContent, setNewContent] = useState('');
+  const [saving, setSaving] = useState(false);
 
-  function addItem() {
-    if (!newContent.trim()) return;
-    setItems([...items, {
-      field, category, content: newContent.trim(),
-      webSources: [], supportingExperiences: [], contradictingExperiences: [],
-      confidenceScore: 0.3, status: 'hypothesis', tags: [], createdAt: '',
-    }]);
-    setNewContent('');
-    setModalVisible(false);
+  const fetchItems = useCallback(async () => {
+    try {
+      const data = await knowledgeApi.list({ field });
+      setItems(data.filter(k => k.category === category));
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, [field, category]);
+
+  useEffect(() => { fetchItems(); }, [fetchItems]);
+
+  async function addItem() {
+    if (!newContent.trim() || saving) return;
+    setSaving(true);
+    try {
+      const created = await knowledgeApi.create({
+        field, category,
+        content: newContent.trim(),
+        webSources: [], supportingExperiences: [], contradictingExperiences: [],
+        confidenceScore: 0.2, status: 'hypothesis', tags: [],
+      });
+      setItems(prev => [...prev, created]);
+      setNewContent('');
+      setModalVisible(false);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-          <Text style={styles.back}>←</Text>
+          <ArrowLeftIcon size={22} color={colors.text} strokeWidth={2} />
         </TouchableOpacity>
         <Text style={styles.title}>{category}</Text>
       </View>
 
-      <FlatList
-        data={[...items, null]}
-        keyExtractor={(item, i) => item?.content ?? String(i)}
-        renderItem={({ item }) =>
-          item === null ? (
-            <TouchableOpacity style={styles.linkItem} onPress={() => setModalVisible(true)}>
-              <Text style={styles.addText}>＋</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              style={styles.linkItem}
-              onPress={() => navigation.navigate('KnowledgeItem', { field, category, item: item.content })}
-              activeOpacity={0.6}
-            >
-              <Text style={styles.linkText}>{item.content}</Text>
-            </TouchableOpacity>
-          )
-        }
-      />
+      {loading ? (
+        <ActivityIndicator style={{ marginTop: 40 }} color={colors.primary} />
+      ) : (
+        <FlatList
+          data={[...items, null]}
+          keyExtractor={(item, i) => item?._id ?? String(i)}
+          renderItem={({ item }) =>
+            item === null ? (
+              <TouchableOpacity style={styles.linkItem} onPress={() => setModalVisible(true)}>
+                <Text style={styles.addText}>＋</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={styles.linkItem}
+                onPress={() => navigation.navigate('KnowledgeItem', { field, category, item: item.content })}
+                activeOpacity={0.6}
+              >
+                <Text style={styles.linkText}>{item.content}</Text>
+              </TouchableOpacity>
+            )
+          }
+        />
+      )}
 
       <Modal visible={modalVisible} transparent animationType="slide">
         <View style={styles.overlay}>
@@ -77,11 +105,14 @@ export default function KnowledgeCategoryScreen({ navigation, route }: Props) {
               autoFocus
             />
             <View style={styles.modalActions}>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
+              <TouchableOpacity onPress={() => { setModalVisible(false); setNewContent(''); }}>
                 <Text style={styles.cancelBtn}>キャンセル</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.addBtn} onPress={addItem}>
-                <Text style={styles.addBtnText}>追加</Text>
+              <TouchableOpacity style={styles.addBtn} onPress={addItem} disabled={saving}>
+                {saving
+                  ? <ActivityIndicator color="#fff" size="small" />
+                  : <Text style={styles.addBtnText}>追加</Text>
+                }
               </TouchableOpacity>
             </View>
           </View>
@@ -113,6 +144,6 @@ const styles = StyleSheet.create({
   },
   modalActions: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 16 },
   cancelBtn: { fontSize: font.md, color: colors.textMuted },
-  addBtn: { backgroundColor: colors.primary, borderRadius: 10, paddingHorizontal: 20, paddingVertical: 10 },
+  addBtn: { backgroundColor: colors.primary, borderRadius: 10, paddingHorizontal: 20, paddingVertical: 10, minWidth: 60, alignItems: 'center' },
   addBtnText: { color: '#fff', fontWeight: '700', fontSize: font.md },
 });

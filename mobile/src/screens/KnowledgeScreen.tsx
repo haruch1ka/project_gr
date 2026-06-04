@@ -1,11 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, ScrollView,
+  View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRoute, RouteProp, useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, font, radius } from '../constants/theme';
-import { mockKnowledge, mockFields } from '../constants/mockData';
+import { ArrowLeftIcon } from 'react-native-heroicons/outline';
+import { knowledgeApi } from '../services/api';
 import { Knowledge } from '../types';
+import { RootStackParamList } from '../../App';
+
+type KnowledgeRoute = RouteProp<RootStackParamList, 'Knowledge'>;
+type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 const STATUS_COLOR: Record<Knowledge['status'], string> = {
   verified:   colors.primary,
@@ -13,50 +20,26 @@ const STATUS_COLOR: Record<Knowledge['status'], string> = {
   disproved:  colors.danger,
 };
 
-// 分野タブ
-function FieldTab({ label, icon, count, active, onPress }: {
-  label: string; icon: string; count: number; active: boolean; onPress: () => void;
-}) {
-  return (
-    <TouchableOpacity
-      style={[styles.tab, active && styles.tabActive]}
-      onPress={onPress}
-      activeOpacity={0.7}
-    >
-      <Text style={styles.tabIcon}>{icon}</Text>
-      <Text style={[styles.tabText, active && styles.tabTextActive]}>{label}</Text>
-      <Text style={[styles.tabCount, active && styles.tabCountActive]}>{count}</Text>
-    </TouchableOpacity>
-  );
-}
-
-// ステータスサマリー
 function StatusSummary({ items }: { items: Knowledge[] }) {
   const verified  = items.filter(k => k.status === 'verified').length;
   const hypo      = items.filter(k => k.status === 'hypothesis').length;
   const disproved = items.filter(k => k.status === 'disproved').length;
   const total = items.length || 1;
-
   return (
     <View style={styles.summaryCard}>
       <View style={styles.summaryRow}>
-        <View style={styles.summaryItem}>
-          <View style={[styles.summaryDot, { backgroundColor: colors.primary }]} />
-          <Text style={styles.summaryLabel}>検証済</Text>
-          <Text style={styles.summaryNum}>{verified}</Text>
-        </View>
-        <View style={styles.summaryItem}>
-          <View style={[styles.summaryDot, { backgroundColor: colors.textSecondary }]} />
-          <Text style={styles.summaryLabel}>仮説</Text>
-          <Text style={styles.summaryNum}>{hypo}</Text>
-        </View>
-        <View style={styles.summaryItem}>
-          <View style={[styles.summaryDot, { backgroundColor: colors.danger }]} />
-          <Text style={styles.summaryLabel}>反証</Text>
-          <Text style={styles.summaryNum}>{disproved}</Text>
-        </View>
+        {[
+          { label: '検証済', count: verified,  color: colors.primary },
+          { label: '仮説',   count: hypo,      color: colors.textSecondary },
+          { label: '反証',   count: disproved, color: colors.danger },
+        ].map(({ label, count, color }) => (
+          <View key={label} style={styles.summaryItem}>
+            <View style={[styles.summaryDot, { backgroundColor: color }]} />
+            <Text style={styles.summaryLabel}>{label}</Text>
+            <Text style={styles.summaryNum}>{count}</Text>
+          </View>
+        ))}
       </View>
-      {/* 三色バー */}
       <View style={styles.triBar}>
         <View style={{ flex: verified,  backgroundColor: colors.primary,       borderRadius: 2 }} />
         <View style={{ flex: hypo,      backgroundColor: colors.textSecondary, borderRadius: 2 }} />
@@ -67,19 +50,16 @@ function StatusSummary({ items }: { items: Knowledge[] }) {
   );
 }
 
-// 知識アイテム
 function KnowledgeItem({ item }: { item: Knowledge }) {
   const pct   = Math.round(item.confidenceScore * 100);
   const color = STATUS_COLOR[item.status];
   return (
     <View style={styles.item}>
-      {/* 上段：ドット・テキスト・パーセント */}
       <View style={styles.itemRow}>
         <View style={[styles.itemDot, { backgroundColor: color }]} />
         <Text style={[styles.itemText, { color }]} numberOfLines={2}>{item.content}</Text>
         <Text style={[styles.itemPct, { color }]}>{pct}%</Text>
       </View>
-      {/* 底面水平バー */}
       <View style={styles.itemBarTrack}>
         <View style={[styles.itemBarFill, { width: `${pct}%` as any, backgroundColor: color }]} />
       </View>
@@ -87,8 +67,9 @@ function KnowledgeItem({ item }: { item: Knowledge }) {
   );
 }
 
-// カテゴリセクション（折りたたみ）
-function CategorySection({ category, items }: { category: string; items: Knowledge[] }) {
+function CategorySection({ category, items, onNavigate }: {
+  category: string; items: Knowledge[]; onNavigate: () => void;
+}) {
   const [open, setOpen] = useState(true);
   return (
     <View style={styles.section}>
@@ -101,61 +82,86 @@ function CategorySection({ category, items }: { category: string; items: Knowled
         <Text style={styles.sectionTitle}>{category}</Text>
         <Text style={styles.sectionCount}>{items.length}</Text>
       </TouchableOpacity>
-      {open && items.map((item, i) => <KnowledgeItem key={i} item={item} />)}
+      {open && items.map((item, i) => <KnowledgeItem key={item._id ?? i} item={item} />)}
     </View>
   );
 }
 
 export default function KnowledgeScreen() {
-  const allFields = mockFields.map(f => f.name);
-  const [selectedField, setSelectedField] = useState(allFields[0] ?? '釣り');
+  const route = useRoute<KnowledgeRoute>();
+  const navigation = useNavigation<Nav>();
+  const field = route.params?.field;
 
-  const filtered   = mockKnowledge.filter(k => k.field === selectedField);
-  const categories = [...new Set(filtered.map(k => k.category))];
+  const [knowledge, setKnowledge] = useState<Knowledge[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetch = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await knowledgeApi.list(field ? { field } : {});
+      setKnowledge(data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, [field]);
+
+  useEffect(() => { fetch(); }, [fetch]);
+
+  const categories = [...new Set(knowledge.map(k => k.category))];
+
+  if (!field) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.title}>知識ツリー</Text>
+        </View>
+        <View style={styles.emptyCenter}>
+          <Text style={styles.emptyIcon}>📚</Text>
+          <Text style={styles.emptyText}>分野を選んでアクセスしてください</Text>
+          <Text style={styles.emptySub}>ホームの分野カード → 📚</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* ヘッダー */}
       <View style={styles.header}>
-        <Text style={styles.title}>知識ツリー</Text>
-        <Text style={styles.subtitle}>カテゴリ・知識</Text>
+        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+          <ArrowLeftIcon size={22} color={colors.text} strokeWidth={2} />
+        </TouchableOpacity>
+        <Text style={styles.title}>{field}の知識</Text>
       </View>
 
-      {/* 分野タブ */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.tabsContent}
-      >
-        {mockFields.map(f => (
-          <FieldTab
-            key={f.name}
-            label={f.name}
-            icon={f.icon}
-            count={mockKnowledge.filter(k => k.field === f.name).length}
-            active={selectedField === f.name}
-            onPress={() => setSelectedField(f.name)}
-          />
-        ))}
-      </ScrollView>
+      {loading ? (
+        <ActivityIndicator style={{ marginTop: 40 }} color={colors.primary} />
+      ) : (
+        <ScrollView contentContainerStyle={styles.scroll}>
+          <StatusSummary items={knowledge} />
 
-      <ScrollView contentContainerStyle={styles.scroll}>
-        {/* ステータスサマリー */}
-        <StatusSummary items={filtered} />
+          {categories.map(cat => (
+            <CategorySection
+              key={cat}
+              category={cat}
+              items={knowledge.filter(k => k.category === cat)}
+              onNavigate={() => navigation.navigate('KnowledgeCategory', { field, category: cat })}
+            />
+          ))}
 
-        {/* カテゴリ別ツリー */}
-        {categories.map(cat => (
-          <CategorySection
-            key={cat}
-            category={cat}
-            items={filtered.filter(k => k.category === cat)}
-          />
-        ))}
+          {knowledge.length === 0 && (
+            <Text style={styles.empty}>この分野の知識はまだありません</Text>
+          )}
 
-        {filtered.length === 0 && (
-          <Text style={styles.empty}>この分野の知識はまだありません</Text>
-        )}
-      </ScrollView>
+          <TouchableOpacity
+            style={styles.addCategoryBtn}
+            onPress={() => navigation.navigate('KnowledgeCategory', { field, category: '新しいカテゴリ' })}
+          >
+            <Text style={styles.addCategoryText}>＋ カテゴリを追加</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
@@ -163,26 +169,15 @@ export default function KnowledgeScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
 
-  header: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 2 },
-  title:    { fontSize: font.xl, fontWeight: '700', color: colors.text },
-  subtitle: { fontSize: font.xs, color: colors.textMuted, marginTop: 1 },
-
-  tabsContent: { paddingHorizontal: 16, paddingVertical: 8, gap: 6 },
-  tab: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingHorizontal: 10, paddingVertical: 5,
-    borderRadius: radius.xl, backgroundColor: colors.bgCard,
-    borderWidth: 1, borderColor: 'transparent',
-    alignSelf: 'flex-start',
+  header: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10,
+    borderBottomWidth: 1, borderBottomColor: colors.border,
   },
-  tabActive:      { borderColor: colors.primary },
-  tabIcon:        { fontSize: 13 },
-  tabText:        { fontSize: font.sm, color: colors.textMuted, fontWeight: '500' },
-  tabTextActive:  { color: colors.primary, fontWeight: '700' },
-  tabCount:       { fontSize: font.xs, color: colors.textSecondary },
-  tabCountActive: { color: colors.primary },
+  back:     { fontSize: 20, color: colors.text, marginRight: 12 },
+  title:    { fontSize: font.xl, fontWeight: '700', color: colors.text },
 
-  scroll: { paddingHorizontal: 16, paddingBottom: 32 },
+  scroll: { paddingHorizontal: 16, paddingBottom: 32, paddingTop: 12 },
 
   summaryCard: {
     backgroundColor: colors.bgCard, borderRadius: radius.md,
@@ -202,8 +197,7 @@ const styles = StyleSheet.create({
   sectionCount:  { fontSize: font.xs, color: colors.textMuted },
 
   item: {
-    backgroundColor: colors.bgCard,
-    borderRadius: radius.md,
+    backgroundColor: colors.bgCard, borderRadius: radius.md,
     paddingTop: 10, paddingHorizontal: 12,
     marginBottom: 4, overflow: 'hidden',
   },
@@ -215,4 +209,16 @@ const styles = StyleSheet.create({
   itemBarFill:  { height: 3 },
 
   empty: { color: colors.textMuted, fontSize: font.sm, textAlign: 'center', marginTop: 40 },
+
+  emptyCenter: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
+  emptyIcon:   { fontSize: 48 },
+  emptyText:   { fontSize: font.md, color: colors.textMuted, fontWeight: '500' },
+  emptySub:    { fontSize: font.sm, color: colors.textSecondary },
+
+  addCategoryBtn: {
+    marginTop: 16, borderRadius: radius.md, borderWidth: 1.5,
+    borderStyle: 'dashed', borderColor: colors.border,
+    padding: 14, alignItems: 'center',
+  },
+  addCategoryText: { color: colors.textMuted, fontSize: font.sm },
 });
