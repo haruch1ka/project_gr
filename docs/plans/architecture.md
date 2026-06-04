@@ -9,12 +9,20 @@
 
 ## 技術スタック
 
-- Backend: Node.js + Express + TypeScript
-- Hosting: Vercel（無料枠、カード不要、スリープなし）
-- Frontend: React Native（Expo）
+- Mobile: React Native（Expo）
+- Backend: Node.js + Express + TypeScript（Vercel、DBのCRUD APIのみ）
 - DB: MongoDB Atlas M0（無料固定）
-- AI: Google Gemini API（gemini-2.0-flash、カード不要・無料枠あり）
-- Web検索: Tavily API（検討中）
+- AI: Google Gemini API（gemini-2.0-flash、モバイルから直叩き）
+- Web検索: 未定
+
+---
+
+## API呼び出し方針
+
+| 対象 | 呼び出し元 | APIキー管理 |
+|------|-----------|------------|
+| MongoDB | back/（Vercel） | 環境変数 |
+| Gemini | mobile（直叩き） | SecureStore |
 
 ---
 
@@ -27,8 +35,7 @@ project_gr/
 │   │   ├── Experience.ts
 │   │   ├── Knowledge.ts
 │   │   ├── Plan.ts
-│   │   ├── ResearchResult.ts
-│   │   └── MetaKnowledge.ts
+│   │   └── ResearchResult.ts
 │   ├── router/
 │   │   ├── experience.ts
 │   │   ├── knowledge.ts

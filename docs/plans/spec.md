@@ -8,9 +8,8 @@
 {
   field: string,          // ユーザーが自由定義
   date: Date,
-  duration: number,       // 時間
-  score: number,          // 自己評価 1〜5
-  memo: string,           // 任意
+  memo: string,           // 自由記述（時間・内容・気づきなど）
+  createdAt: Date,
 }
 ```
 
@@ -19,12 +18,13 @@
 ```typescript
 {
   field: string,
+  category: string,                              // ユーザー定義のカテゴリ
   content: string,
-  webSources: ResearchResult[],              // 元になったWeb情報
-  supportingExperiences: Experience[],       // 裏付けた経験
-  contradictingExperiences: Experience[],    // 反例になった経験
-  confidenceScore: number,
-  status: 'hypothesis' | 'verified' | 'disproved',
+  webSources: ResearchResult[],                  // 元になったWeb情報
+  supportingExperiences: Experience[],           // 裏付けた経験
+  contradictingExperiences: Experience[],        // 反例になった経験
+  confidenceScore: number,                       // ベイズ的に更新
+  status: 'hypothesis' | 'verified' | 'disproved',  // 閾値設計は未決定
   tags: string[],
 }
 ```
@@ -34,11 +34,11 @@
 ```typescript
 {
   field: string,
-  createdAt: Date,
-  proposal: string,         // Claudeの提案テキスト
-  dialogHistory: [],        // 対話ログ（次回の文脈用）
+  proposal: string,              // Geminiの提案テキスト
+  dialogHistory: ChatMessage[],  // 対話ログ（次回の文脈用）
   reviewedAt: Date | null,
   reviewNote: string | null,
+  createdAt: Date,
 }
 ```
 
@@ -50,15 +50,15 @@
   query: string,
   results: [{ title, url, snippet }],
   collectedAt: Date,
-  usedInPlanId: string | null,
+  usedInKnowledgeIds: string[],  // 紐付いたKnowledgeのID
 }
 ```
 
-### MetaKnowledge（classレベルの知識）
+### MetaKnowledge（classレベルの知識）※MVP後
 
 ```typescript
 {
-  content: string,          // 上達という行為自体についての知識
+  content: string,           // 上達という行為自体についての知識
   sourceInstances: string[], // 抽出元の分野
   createdAt: Date,
 }
@@ -85,7 +85,7 @@
 
 ### 設計
 
-- **方式**：固定の「問いの型（約10問）」を骨格に、Claudeが文脈を挿入して動的生成
+- **方式**：固定の「問いの型（約10問）」を骨格に、Geminiが文脈を挿入して動的生成
 - **周期**：バンドを設けたランダム（最短3日・最長14日）
 - **形式**：選択肢メイン、10秒以内で完了
 
@@ -110,20 +110,20 @@
 
 ### 基本方針
 
-> ユーザーの入力は「意思・感情・気づき」だけに集中させる。構造化はClaudeが担う。
+> ユーザーの入力は「意思・感情・気づき」だけに集中させる。構造化はGeminiが担う。
 
 ### 2モードの分離
 
 | モード     | 場面                                  | 目標                     |
 | ---------- | ------------------------------------- | ------------------------ |
 | 軽量モード | 経験ログ・アンケート・Web収集トリガー | 摩擦ゼロ・考えさせない   |
-| 重量モード | Claude対話                            | コストをかけて深く考える |
+| 重量モード | Gemini対話                            | コストをかけて深く考える |
 
 ### 軽量モードの理想形
 
-- 経験ログ：分野タップ → 自己評価タップ → 完了（5秒以内）
+- 経験ログ：分野タップ → メモ入力 → 完了
 - アンケート：通知 → 開く → 選択肢タップ → 完了（10秒以内）
-- 「一言入力 → Claudeが構造化 → ユーザーが確認タップ」のパターンを基本とする
+- 「一言入力 → Geminiが構造化 → ユーザーが確認タップ」のパターンを基本とする
 
 ---
 

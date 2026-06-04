@@ -55,9 +55,8 @@ Web情報（断片・仮説の種）
 {
   field: string,          // ユーザーが自由定義
   date: Date,
-  duration: number,       // 時間
-  score: number,          // 自己評価 1〜5
-  memo: string,           // 任意
+  memo: string,           // 自由記述（時間・内容・気づきなど）
+  createdAt: Date,
 }
 ```
 
@@ -65,12 +64,13 @@ Web情報（断片・仮説の種）
 ```typescript
 {
   field: string,
+  category: string,                              // ユーザー定義のカテゴリ
   content: string,
-  webSources: ResearchResult[],              // 元になったWeb情報
-  supportingExperiences: Experience[],       // 裏付けた経験
-  contradictingExperiences: Experience[],    // 反例になった経験
+  webSources: ResearchResult[],                  // 元になったWeb情報
+  supportingExperiences: Experience[],           // 裏付けた経験
+  contradictingExperiences: Experience[],        // 反例になった経験
   confidenceScore: number,
-  status: 'hypothesis' | 'verified' | 'disproved',
+  status: 'hypothesis' | 'verified' | 'disproved',  // 閾値設計は未決定
   tags: string[],
 }
 ```
@@ -79,11 +79,11 @@ Web情報（断片・仮説の種）
 ```typescript
 {
   field: string,
-  createdAt: Date,
-  proposal: string,         // Claudeの提案テキスト
-  dialogHistory: [],        // 対話ログ（次回の文脈用）
+  proposal: string,              // Geminiの提案テキスト
+  dialogHistory: ChatMessage[],  // 対話ログ（次回の文脈用）
   reviewedAt: Date | null,
   reviewNote: string | null,
+  createdAt: Date,
 }
 ```
 
@@ -94,14 +94,14 @@ Web情報（断片・仮説の種）
   query: string,
   results: [{ title, url, snippet }],
   collectedAt: Date,
-  usedInPlanId: string | null,
+  usedInKnowledgeIds: string[],  // 紐付いたKnowledgeのID
 }
 ```
 
-### MetaKnowledge（classレベルの知識）
+### MetaKnowledge（classレベルの知識）※MVP後
 ```typescript
 {
-  content: string,          // 上達という行為自体についての知識
+  content: string,           // 上達という行為自体についての知識
   sourceInstances: string[], // 抽出元の分野
   createdAt: Date,
 }
@@ -175,9 +175,9 @@ Web情報（断片・仮説の種）
 ## 技術スタック
 
 - Backend: Node.js + Express + TypeScript
-- Frontend: React + Vite + TypeScript + Tailwind CSS
+- Frontend: React Native（Expo）
 - DB: MongoDB Atlas
-- AI: Anthropic Claude API（claude-sonnet-4-6）
+- AI: Google Gemini API（gemini-2.0-flash）
 - Web検索: Tavily API（検討中）
 
 ---
@@ -199,9 +199,9 @@ project_gr/
 │   │   ├── plan.ts
 │   │   └── research.ts
 │   └── server.ts
-└── front/
+└── mobile/
     └── src/
-        ├── pages/
+        ├── screens/
         │   ├── log/
         │   ├── knowledge/
         │   ├── dashboard/
@@ -216,5 +216,6 @@ project_gr/
 ## 未決事項
 
 - Web検索APIの選定（Tavily推奨）
+- Knowledge の status フィールドの閾値設計
 - 可視化の具体的な手法
 - MVP対象分野・機能範囲の絞り込み
