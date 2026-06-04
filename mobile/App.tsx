@@ -1,16 +1,14 @@
 import React from 'react';
-import { NavigationContainer, NavigatorScreenParams } from '@react-navigation/native';
+import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { View, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { RouteProp } from '@react-navigation/native';
 import { colors } from './src/constants/theme';
 import {
-  HomeIcon,
-  BookOpenIcon,
-  PencilSquareIcon,
-  ChatBubbleOvalLeftIcon,
-  ClipboardDocumentListIcon,
+  HomeIcon, BookOpenIcon, PencilSquareIcon,
+  ChatBubbleOvalLeftIcon, ClipboardDocumentListIcon,
 } from 'react-native-heroicons/outline';
 import {
   HomeIcon as HomeIconSolid,
@@ -29,61 +27,78 @@ import WebScreen from './src/screens/WebScreen';
 import PlanScreen from './src/screens/PlanScreen';
 import LogScreen from './src/screens/LogScreen';
 import QuickLogScreen from './src/screens/QuickLogScreen';
+import SettingsScreen from './src/screens/SettingsScreen';
+import { FieldProvider, useField } from './src/context/FieldContext';
+
+// ─── 型定義 ──────────────────────────────────────────────────────────────────
 
 export type RootStackParamList = {
-  Tabs: NavigatorScreenParams<TabParamList> | undefined;
-  Dashboard: { field: string };
-  Log: { field: string };
-  Knowledge: { field: string };
+  FieldTabs:         { field?: string };
+  Home:              undefined;
+  Log:               { field: string };
   KnowledgeCategory: { field: string; category: string };
-  KnowledgeItem: { field: string; category: string; item: string };
-  Web: { field: string };
-  QuickLog: undefined;
+  KnowledgeItem:     { field: string; category: string; item: string };
+  Web:               { field: string };
+  QuickLog:          { field?: string };
+  Settings:          undefined;
 };
 
-export type TabParamList = {
-  Home: undefined;
-  Knowledge: { field?: string };
-  _QuickLog: undefined;
-  Chat: { field?: string };
-  Plan: { field?: string };
+export type FieldTabParamList = {
+  Dashboard: undefined;
+  Knowledge: undefined;
+  _FieldLog: undefined;
+  Chat:      undefined;
+  Plan:      undefined;
 };
 
-const Stack = createNativeStackNavigator<RootStackParamList>();
-const Tab = createBottomTabNavigator<TabParamList>();
+// ─── ナビゲーターインスタンス ─────────────────────────────────────────────
+
+const Stack    = createNativeStackNavigator<RootStackParamList>();
+const FieldTab = createBottomTabNavigator<FieldTabParamList>();
+
+// ─── タブバー ─────────────────────────────────────────────────────────────
+
+const TAB_LABELS: Record<string, string> = {
+  Dashboard: 'ホーム',
+  Knowledge: '知識',
+  Chat:      '対話',
+  Plan:      'プラン',
+};
 
 function TabIcon({ name, focused }: { name: string; focused: boolean }) {
   const color = focused ? colors.primary : colors.textSecondary;
-  const props = { size: 24, color, strokeWidth: focused ? 2 : 1.5 };
-  if (name === 'Home')      return focused ? <HomeIconSolid {...props} /> : <HomeIcon {...props} />;
-  if (name === 'Knowledge') return focused ? <BookOpenIconSolid {...props} /> : <BookOpenIcon {...props} />;
-  if (name === 'Chat')      return focused ? <ChatIconSolid {...props} /> : <ChatBubbleOvalLeftIcon {...props} />;
-  if (name === 'Plan')      return focused ? <PlanIconSolid {...props} /> : <ClipboardDocumentListIcon {...props} />;
+  const p = { size: 24, color, strokeWidth: focused ? 2 : 1.5 };
+  if (name === 'Dashboard') return focused ? <HomeIconSolid {...p} /> : <HomeIcon {...p} />;
+  if (name === 'Knowledge') return focused ? <BookOpenIconSolid {...p} /> : <BookOpenIcon {...p} />;
+  if (name === 'Chat')      return focused ? <ChatIconSolid {...p} /> : <ChatBubbleOvalLeftIcon {...p} />;
+  if (name === 'Plan')      return focused ? <PlanIconSolid {...p} /> : <ClipboardDocumentListIcon {...p} />;
   return null;
 }
 
-function CustomTabBar({ state, descriptors, navigation }: any) {
+function FieldTabBar({ state, navigation }: any) {
+  const { activeField } = useField();
   return (
     <View style={tabStyles.bar}>
       {state.routes.map((route: any, index: number) => {
-        const focused = state.index === index;
-        const isCenter = route.name === '_QuickLog';
+        const focused  = state.index === index;
+        const isCenter = route.name === '_FieldLog';
 
         if (isCenter) {
           return (
             <TouchableOpacity
               key={route.key}
               style={tabStyles.centerWrap}
-              onPress={() => navigation.getParent()?.navigate('QuickLog')}
+              onPress={() => navigation.getParent()?.navigate('QuickLog', { field: activeField })}
               activeOpacity={0.8}
             >
               <View style={tabStyles.centerBtn}>
-                <PencilSquareIcon size={24} color="#fff" strokeWidth={2} />
+                <PencilSquareIcon size={22} color="#fff" strokeWidth={2} />
               </View>
             </TouchableOpacity>
           );
         }
 
+        const label = TAB_LABELS[route.name] ?? route.name;
         return (
           <TouchableOpacity
             key={route.key}
@@ -95,6 +110,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
             activeOpacity={0.7}
           >
             <TabIcon name={route.name} focused={focused} />
+            <Text style={[tabStyles.label, focused && tabStyles.labelFocused]}>{label}</Text>
           </TouchableOpacity>
         );
       })}
@@ -107,55 +123,63 @@ const tabStyles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: colors.bgDeep,
     borderTopWidth: 1, borderTopColor: colors.border,
-    height: 64, paddingBottom: 8,
+    height: 72, paddingBottom: 10,
   },
-  tab:        { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  centerWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  tab:          { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 3 },
+  label:        { fontSize: 10, color: colors.textSecondary },
+  labelFocused: { color: colors.primary },
+  centerWrap:   { flex: 1, alignItems: 'center', justifyContent: 'center' },
   centerBtn: {
-    width: 52, height: 52, borderRadius: 26,
+    width: 52, height: 52, borderRadius: 14,
     backgroundColor: colors.primary,
     alignItems: 'center', justifyContent: 'center',
-    marginBottom: 12,
+    marginBottom: 14,
     shadowColor: colors.primary, shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4, shadowRadius: 8, elevation: 8,
+    shadowOpacity: 0.5, shadowRadius: 10, elevation: 10,
   },
-  centerIcon: { fontSize: 22 },
 });
+
+// ─── フィールドTabナビゲーター ────────────────────────────────────────────
 
 function EmptyScreen() { return null; }
 
-function TabNavigator() {
+function FieldTabNavigator({ route }: { route: RouteProp<RootStackParamList, 'FieldTabs'> }) {
+  const initialField = route.params?.field;
   return (
-    <Tab.Navigator
-      tabBar={props => <CustomTabBar {...props} />}
-      screenOptions={{ headerShown: false }}
-    >
-      <Tab.Screen name="Home" component={HomeScreen} />
-      <Tab.Screen name="Knowledge" component={KnowledgeScreen} />
-      <Tab.Screen name="_QuickLog" component={EmptyScreen} />
-      <Tab.Screen name="Chat" component={ChatScreen} />
-      <Tab.Screen name="Plan" component={PlanScreen} />
-    </Tab.Navigator>
+    <FieldProvider initialField={initialField}>
+      <FieldTab.Navigator
+        tabBar={props => <FieldTabBar {...props} />}
+        screenOptions={{ headerShown: false }}
+      >
+        <FieldTab.Screen name="Dashboard" component={DashboardScreen} />
+        <FieldTab.Screen name="Knowledge" component={KnowledgeScreen} />
+        <FieldTab.Screen name="_FieldLog" component={EmptyScreen} />
+        <FieldTab.Screen name="Chat"      component={ChatScreen} />
+        <FieldTab.Screen name="Plan"      component={PlanScreen} />
+      </FieldTab.Navigator>
+    </FieldProvider>
   );
 }
+
+// ─── ルートApp ──────────────────────────────────────────────────────────────
 
 export default function App() {
   return (
     <SafeAreaProvider>
       <NavigationContainer>
         <Stack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
-          <Stack.Screen name="Tabs" component={TabNavigator} />
-          <Stack.Screen name="Dashboard" component={DashboardScreen} />
-          <Stack.Screen name="Log" component={LogScreen} />
-          <Stack.Screen name="Knowledge" component={KnowledgeScreen} />
+          <Stack.Screen name="FieldTabs" component={FieldTabNavigator} />
+          <Stack.Screen name="Home"      component={HomeScreen} />
+          <Stack.Screen name="Log"       component={LogScreen} />
           <Stack.Screen name="KnowledgeCategory" component={KnowledgeCategoryScreen} />
-          <Stack.Screen name="KnowledgeItem" component={KnowledgeItemScreen} />
-          <Stack.Screen name="Web" component={WebScreen} />
+          <Stack.Screen name="KnowledgeItem"     component={KnowledgeItemScreen} />
+          <Stack.Screen name="Web"       component={WebScreen} />
           <Stack.Screen
             name="QuickLog"
             component={QuickLogScreen}
             options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
           />
+          <Stack.Screen name="Settings" component={SettingsScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>

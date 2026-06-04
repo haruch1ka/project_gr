@@ -1,29 +1,34 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   FlatList, KeyboardAvoidingView, Platform, ActivityIndicator,
 } from 'react-native';
-import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { TabParamList, RootStackParamList } from '../../App';
+import { RootStackParamList } from '../../App';
+import { useField } from '../context/FieldContext';
 import { colors, font, radius } from '../constants/theme';
-import { ChatMessage } from '../types';
+import { ChatMessage, Knowledge, Experience } from '../types';
 import { chat } from '../services/gemini';
-import { mockKnowledge, mockExperiences, mockFields } from '../constants/mockData';
+import { knowledgeApi, experienceApi, planApi } from '../services/api';
 
-type ChatRoute = RouteProp<TabParamList, 'Chat'>;
+type ChatNav = NativeStackNavigationProp<RootStackParamList>;
+
+type ChatRoute = RouteProp<FieldTabParamList, 'Chat'>;
+
+const FIELD_ICONS: Record<string, string> = {
+  釣り: '🎣', 筋トレ: '💪', 読書: '📖', 料理: '🍳', 音楽: '🎵',
+  英語: '🌍', ゴルフ: '⛳', ランニング: '🏃',
+};
 
 const ACTION_THRESHOLD = 4;
 
-function buildSystemPrompt(field: string): string {
-  const knowledge = mockKnowledge.filter(k => k.field === field);
-  const experiences = mockExperiences[field] ?? [];
-
+function buildSystemPrompt(field: string, knowledge: Knowledge[], experiences: Experience[]): string {
   const knowledgePart = knowledge.length > 0
     ? knowledge.map(k => {
-        const statusLabel = k.status === 'verified' ? '検証済' : k.status === 'disproved' ? '反証' : '仮説';
-        return `- [${statusLabel} ${Math.round(k.confidenceScore * 100)}%] ${k.content}`;
+        const label = k.status === 'verified' ? '検証済' : k.status === 'disproved' ? '反証' : '仮説';
+        return `- [${label} ${Math.round(k.confidenceScore * 100)}%] ${k.content}`;
       }).join('\n')
     : '（まだ知識がありません）';
 
@@ -48,30 +53,46 @@ ${experiencePart}
 }
 
 export default function ChatScreen() {
-  const route = useRoute<ChatRoute>();
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const routeField = route.params?.field ?? null;
+  const navigation = useNavigation<ChatNav>();
+  const { activeField } = useField();
 
-  const [selectedField, setSelectedField] = useState<string | null>(routeField);
-  const [messages, setMessages] = useState<ChatMessage[]>(
-    routeField
-      ? [{ role: 'assistant', text: `${routeField}について、最近の経験や疑問を話してください。一緒に整理しましょう。` }]
-      : []
-  );
-  const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [showActions, setShowActions] = useState(false);
+  const [knowledge,  setKnowledge]  = useState<Knowledge[]>([]);
+  const [experiences, setExperiences] = useState<Experience[]>([]);
+  const [messages,   setMessages]   = useState<ChatMessage[]>([
+    { role: 'assistant', text: `${activeField}について、最近の経験や疑問を話してください。一緒に整理しましょう。` },
+  ]);
+  const [input,          setInput]          = useState('');
+  const [loading,        setLoading]        = useState(false);
+  const [contextLoading, setContextLoading] = useState(false);
+  const [showActions,    setShowActions]    = useState(false);
+  const [actionLoading,  setActionLoading]  = useState<string | null>(null);
   const listRef = useRef<FlatList>(null);
 
-  function selectField(field: string) {
-    setSelectedField(field);
-    setMessages([{ role: 'assistant', text: `${field}について、最近の経験や疑問を話してください。一緒に整理しましょう。` }]);
+  // 分野が変わったらメッセージをリセット
+  useEffect(() => {
+    setMessages([{ role: 'assistant', text: `${activeField}について、最近の経験や疑問を話してください。一緒に整理しましょう。` }]);
     setShowActions(false);
-  }
+  }, [activeField]);
+
+  // コンテキスト取得
+  const fetchContext = useCallback(async (field: string) => {
+    setContextLoading(true);
+    try {
+      const [k, e] = await Promise.all([
+        knowledgeApi.list({ field }),
+        experienceApi.list(field),
+      ]);
+      setKnowledge(k);
+      setExperiences(e);
+    } catch (e) { console.error(e); }
+    finally { setContextLoading(false); }
+  }, []);
+
+  useEffect(() => { fetchContext(activeField); }, [activeField, fetchContext]);
 
   async function send() {
     const text = input.trim();
-    if (!text || loading || !selectedField) return;
+    if (!text || loading) return;
 
     const userMsg: ChatMessage = { role: 'user', text };
     const newMessages = [...messages, userMsg];
@@ -80,83 +101,84 @@ export default function ChatScreen() {
     setLoading(true);
 
     try {
-      const history = newMessages
-        .slice(-6)
+      const history = newMessages.slice(-6)
         .map(m => `${m.role === 'user' ? 'ユーザー' : 'AI'}: ${m.text}`)
         .join('\n');
-      const systemPrompt = buildSystemPrompt(selectedField);
-      const context = `${systemPrompt}\n\n【会話履歴】\n${history}`;
-
-      const reply = await chat(`ユーザー: ${text}\nAI:`, context);
+      const systemPrompt = buildSystemPrompt(activeField, knowledge, experiences);
+      const reply = await chat(`ユーザー: ${text}\nAI:`, `${systemPrompt}\n\n【会話履歴】\n${history}`);
       const updated: ChatMessage[] = [...newMessages, { role: 'assistant', text: reply }];
       setMessages(updated);
-
-      if (updated.length >= ACTION_THRESHOLD) {
-        setShowActions(true);
-      }
+      if (updated.length >= ACTION_THRESHOLD) setShowActions(true);
     } catch (e) {
       const err = e as Error;
-      const errorText = err.message.includes('未設定')
-        ? 'Gemini APIキーが設定されていません。'
-        : '送信に失敗しました。しばらく待ってから再試行してください。';
-      setMessages(prev => [...prev, { role: 'assistant', text: errorText }]);
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        text: err.message.includes('未設定')
+          ? 'Gemini APIキーが設定されていません。'
+          : '送信に失敗しました。しばらく待ってから再試行してください。',
+      }]);
     } finally {
       setLoading(false);
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
     }
   }
 
-  if (!selectedField) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.title}>AI対話</Text>
-          <Text style={styles.headerSub}>分野を選んでください</Text>
-        </View>
-        <View style={styles.fieldSelect}>
-          {mockFields.map(f => (
-            <TouchableOpacity
-              key={f.name}
-              style={styles.fieldChip}
-              onPress={() => selectField(f.name)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.fieldChipIcon}>{f.icon}</Text>
-              <Text style={styles.fieldChipText}>{f.name}</Text>
-              <Text style={styles.fieldChipArrow}>›</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </SafeAreaView>
-    );
+  async function savePlan() {
+    if (!activeField || actionLoading) return;
+    setActionLoading('plan');
+    try {
+      const history = messages.map(m => `${m.role === 'user' ? 'ユーザー' : 'AI'}: ${m.text}`).join('\n');
+      const systemPrompt = buildSystemPrompt(activeField, knowledge, experiences);
+      const proposal = await chat(
+        'この会話から、ユーザーへの具体的な次の行動プランを1〜2文で提案してください。',
+        `${systemPrompt}\n\n【会話履歴】\n${history}`
+      );
+      await planApi.create({
+        field: activeField, proposal,
+        dialogHistory: messages,
+        reviewedAt: null, reviewNote: null,
+      });
+      setMessages(prev => [...prev, { role: 'assistant', text: `プランを保存しました：\n${proposal}` }]);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function saveKnowledge() {
+    if (!activeField || actionLoading) return;
+    setActionLoading('knowledge');
+    try {
+      const history = messages.map(m => `${m.role === 'user' ? 'ユーザー' : 'AI'}: ${m.text}`).join('\n');
+      const systemPrompt = buildSystemPrompt(activeField, knowledge, experiences);
+      const summary = await chat(
+        'この会話から得られた重要な知識・洞察を1文で簡潔に表現してください。',
+        `${systemPrompt}\n\n【会話履歴】\n${history}`
+      );
+      const category = await chat(
+        'この知識のカテゴリを5文字以内で答えてください（例：タイミング、フォーム、回復）。',
+        `${systemPrompt}\n\n知識：${summary}`
+      );
+      await knowledgeApi.create({
+        field: activeField,
+        category: category.trim().slice(0, 20),
+        content: summary,
+        webSources: [], supportingExperiences: [], contradictingExperiences: [],
+        confidenceScore: 0.3, status: 'hypothesis', tags: [],
+      });
+      setMessages(prev => [...prev, { role: 'assistant', text: `知識として保存しました：\n${summary}` }]);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setActionLoading(null);
+    }
   }
 
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        {/* ヘッダー */}
-        <View style={styles.header}>
-          {routeField != null ? (
-            <TouchableOpacity
-              onPress={() => navigation.navigate('Dashboard', { field: routeField })}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            >
-              <Text style={styles.back}>←</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              onPress={() => setSelectedField(null)}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            >
-              <Text style={styles.back}>←</Text>
-            </TouchableOpacity>
-          )}
-          <View style={styles.headerCenter}>
-            <Text style={styles.title}>{selectedField}</Text>
-            <Text style={styles.headerSub}>AI対話</Text>
-          </View>
-        </View>
-
+        <Text style={styles.screenTitle}>対話</Text>
         {/* メッセージリスト */}
         <FlatList
           ref={listRef}
@@ -186,17 +208,29 @@ export default function ChatScreen() {
           <View style={styles.actions}>
             <Text style={styles.actionsLabel}>── 対話まとめ ──</Text>
             <View style={styles.actionRow}>
-              <TouchableOpacity style={styles.actionBtn} activeOpacity={0.7}>
-                <Text style={styles.actionBtnIcon}>📋</Text>
-                <Text style={styles.actionBtnText}>プランを提案</Text>
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={savePlan}
+                disabled={!!actionLoading}
+                activeOpacity={0.7}
+              >
+                {actionLoading === 'plan'
+                  ? <ActivityIndicator size="small" color={colors.primary} />
+                  : <Text style={styles.actionBtnIcon}>📋</Text>
+                }
+                <Text style={styles.actionBtnText}>プランを保存</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.actionBtn} activeOpacity={0.7}>
-                <Text style={styles.actionBtnIcon}>💡</Text>
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={saveKnowledge}
+                disabled={!!actionLoading}
+                activeOpacity={0.7}
+              >
+                {actionLoading === 'knowledge'
+                  ? <ActivityIndicator size="small" color={colors.primary} />
+                  : <Text style={styles.actionBtnIcon}>💡</Text>
+                }
                 <Text style={styles.actionBtnText}>知識として保存</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.actionBtn} activeOpacity={0.7}>
-                <Text style={styles.actionBtnIcon}>📊</Text>
-                <Text style={styles.actionBtnText}>グラフで確認</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -227,18 +261,8 @@ export default function ChatScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-
-  header: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 20, paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: colors.border,
-    gap: 12,
-  },
-  back: { fontSize: 20, color: colors.text },
-  headerCenter: { flex: 1 },
-  title: { fontSize: font.lg, fontWeight: '700', color: colors.text },
-  headerSub: { fontSize: font.xs, color: colors.textMuted, marginTop: 1 },
+  container:   { flex: 1, backgroundColor: colors.bg },
+  screenTitle: { fontSize: font.xl, fontWeight: '700', color: colors.text, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 },
 
   fieldSelect: { flex: 1, padding: 20, gap: 10, justifyContent: 'center' },
   fieldChip: {
@@ -246,8 +270,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgCard,
     borderRadius: radius.md, paddingHorizontal: 16, paddingVertical: 14,
   },
-  fieldChipIcon: { fontSize: 24 },
-  fieldChipText: { flex: 1, fontSize: font.md, fontWeight: '600', color: colors.text },
+  fieldChipIcon:  { fontSize: 24 },
+  fieldChipText:  { flex: 1, fontSize: font.md, fontWeight: '600', color: colors.text },
   fieldChipArrow: { fontSize: 20, color: colors.textSecondary },
 
   messageList: { padding: 16, gap: 10 },
@@ -255,9 +279,8 @@ const styles = StyleSheet.create({
     maxWidth: '80%', borderRadius: 16, padding: 12,
     backgroundColor: colors.bgCard, alignSelf: 'flex-start',
   },
-  bubbleUser: { backgroundColor: colors.primary, alignSelf: 'flex-end' },
-  bubbleAI: {},
-  bubbleText: { fontSize: font.md, color: colors.text, lineHeight: 22 },
+  bubbleUser:     { backgroundColor: colors.primary, alignSelf: 'flex-end' },
+  bubbleText:     { fontSize: font.md, color: colors.text, lineHeight: 22 },
   bubbleTextUser: { color: '#fff' },
 
   loadingRow: {
@@ -268,11 +291,10 @@ const styles = StyleSheet.create({
 
   actions: {
     borderTopWidth: 1, borderTopColor: colors.border,
-    paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4,
-    gap: 8,
+    paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4, gap: 8,
   },
   actionsLabel: { fontSize: font.xs, color: colors.textMuted, textAlign: 'center' },
-  actionRow: { flexDirection: 'row', gap: 8 },
+  actionRow:    { flexDirection: 'row', gap: 8 },
   actionBtn: {
     flex: 1, alignItems: 'center', gap: 4,
     backgroundColor: colors.bgCard,
@@ -293,10 +315,7 @@ const styles = StyleSheet.create({
     fontSize: font.md, color: colors.text, maxHeight: 100,
     backgroundColor: colors.bgInput,
   },
-  sendBtn: {
-    backgroundColor: colors.primary, borderRadius: 20,
-    paddingHorizontal: 16, paddingVertical: 10,
-  },
+  sendBtn:         { backgroundColor: colors.primary, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10 },
   sendBtnDisabled: { backgroundColor: colors.textSecondary },
-  sendBtnText: { color: '#fff', fontWeight: '700', fontSize: font.sm },
+  sendBtnText:     { color: '#fff', fontWeight: '700', fontSize: font.sm },
 });

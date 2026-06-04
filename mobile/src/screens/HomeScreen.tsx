@@ -214,7 +214,7 @@ export default function HomeScreen() {
             <TouchableOpacity
               key={field.name}
               style={styles.fieldCard}
-              onPress={() => navigation.navigate('Dashboard', { field: field.name })}
+              onPress={() => navigation.navigate('FieldTabs', { field: field.name })}
               activeOpacity={0.7}
             >
               <Text style={styles.fieldIcon}>{field.icon}</Text>

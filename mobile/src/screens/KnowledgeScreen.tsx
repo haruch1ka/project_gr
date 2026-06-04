@@ -3,15 +3,14 @@ import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRoute, RouteProp, useNavigation } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, font, radius } from '../constants/theme';
-import { ArrowLeftIcon } from 'react-native-heroicons/outline';
 import { knowledgeApi } from '../services/api';
 import { Knowledge } from '../types';
 import { RootStackParamList } from '../../App';
+import { useField } from '../context/FieldContext';
 
-type KnowledgeRoute = RouteProp<RootStackParamList, 'Knowledge'>;
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 const STATUS_COLOR: Record<Knowledge['status'], string> = {
@@ -88,9 +87,8 @@ function CategorySection({ category, items, onNavigate }: {
 }
 
 export default function KnowledgeScreen() {
-  const route = useRoute<KnowledgeRoute>();
-  const navigation = useNavigation<Nav>();
-  const field = route.params?.field;
+  const navigation   = useNavigation<Nav>();
+  const { activeField: field } = useField();
 
   const [knowledge, setKnowledge] = useState<Knowledge[]>([]);
   const [loading, setLoading] = useState(true);
@@ -98,7 +96,7 @@ export default function KnowledgeScreen() {
   const fetch = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await knowledgeApi.list(field ? { field } : {});
+      const data = await knowledgeApi.list({ field });
       setKnowledge(data);
     } catch (e) {
       console.error(e);
@@ -111,34 +109,13 @@ export default function KnowledgeScreen() {
 
   const categories = [...new Set(knowledge.map(k => k.category))];
 
-  if (!field) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.title}>知識ツリー</Text>
-        </View>
-        <View style={styles.emptyCenter}>
-          <Text style={styles.emptyIcon}>📚</Text>
-          <Text style={styles.emptyText}>分野を選んでアクセスしてください</Text>
-          <Text style={styles.emptySub}>ホームの分野カード → 📚</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-          <ArrowLeftIcon size={22} color={colors.text} strokeWidth={2} />
-        </TouchableOpacity>
-        <Text style={styles.title}>{field}の知識</Text>
-      </View>
-
       {loading ? (
         <ActivityIndicator style={{ marginTop: 40 }} color={colors.primary} />
       ) : (
         <ScrollView contentContainerStyle={styles.scroll}>
+          <Text style={styles.pageTitle}>知識</Text>
           <StatusSummary items={knowledge} />
 
           {categories.map(cat => (
@@ -169,15 +146,8 @@ export default function KnowledgeScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
 
-  header: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10,
-    borderBottomWidth: 1, borderBottomColor: colors.border,
-  },
-  back:     { fontSize: 20, color: colors.text, marginRight: 12 },
-  title:    { fontSize: font.xl, fontWeight: '700', color: colors.text },
-
-  scroll: { paddingHorizontal: 16, paddingBottom: 32, paddingTop: 12 },
+  scroll:     { paddingHorizontal: 16, paddingBottom: 32, paddingTop: 12 },
+  pageTitle:  { fontSize: font.xl, fontWeight: '700', color: colors.text, marginBottom: 16 },
 
   summaryCard: {
     backgroundColor: colors.bgCard, borderRadius: radius.md,

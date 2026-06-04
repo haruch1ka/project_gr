@@ -4,17 +4,15 @@ import {
   View, Text, TouchableOpacity, StyleSheet, FlatList,
   Modal, TextInput, ActivityIndicator,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../../App';
+import { useField } from '../context/FieldContext';
+
+type PlanNav = NativeStackNavigationProp<RootStackParamList>;
 import { colors, font, radius } from '../constants/theme';
 import { planApi } from '../services/api';
 import { Plan } from '../types';
-
-type Props = {
-  navigation: NativeStackNavigationProp<RootStackParamList, 'Plan'>;
-  route: RouteProp<RootStackParamList, 'Plan'>;
-};
 
 function PlanCard({ item }: { item: Plan }) {
   const date = item.createdAt ? new Date(item.createdAt).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' }) : '';
@@ -35,8 +33,9 @@ function PlanCard({ item }: { item: Plan }) {
   );
 }
 
-export default function PlanScreen({ navigation, route }: Props) {
-  const field = route.params?.field;
+export default function PlanScreen() {
+  const navigation = useNavigation<PlanNav>();
+  const { activeField: field } = useField();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
@@ -79,31 +78,7 @@ export default function PlanScreen({ navigation, route }: Props) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-          <Text style={styles.back}>←</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>{field ?? '行動プラン'}</Text>
-        <View style={styles.actions}>
-          {field && (
-            <>
-              <TouchableOpacity onPress={() => navigation.navigate('Web', { field })}>
-                <Text style={styles.actionIcon}>🔍</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => navigation.navigate('Tabs', { screen: 'Chat', params: { field } })}>
-                <Text style={styles.actionIcon}>💬</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => navigation.navigate('Tabs', { screen: 'Knowledge', params: { field } })}>
-                <Text style={styles.actionIcon}>📚</Text>
-              </TouchableOpacity>
-            </>
-          )}
-          <TouchableOpacity>
-            <Text style={[styles.actionIcon, styles.actionIconActive]}>📋</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
+      <Text style={styles.screenTitle}>プラン</Text>
       {loading ? (
         <ActivityIndicator style={{ marginTop: 40 }} color={colors.primary} />
       ) : (
@@ -161,17 +136,8 @@ export default function PlanScreen({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-  header: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 20, paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: colors.border,
-  },
-  back: { fontSize: 20, color: colors.text, marginRight: 16 },
-  title: { fontSize: font.lg, fontWeight: '700', flex: 1 },
-  actions: { flexDirection: 'row', gap: 4 },
-  actionIcon: { fontSize: 20, padding: 6 },
-  actionIconActive: { opacity: 0.4 },
+  container:   { flex: 1, backgroundColor: colors.bg },
+  screenTitle: { fontSize: font.xl, fontWeight: '700', color: colors.text, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 },
 
   list: { padding: 16, gap: 12 },
 
