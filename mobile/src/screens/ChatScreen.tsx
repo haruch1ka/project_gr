@@ -10,17 +10,10 @@ import { RootStackParamList } from '../../App';
 import { useField } from '../context/FieldContext';
 import { colors, font, radius } from '../constants/theme';
 import { ChatMessage, Knowledge, Experience } from '../types';
-import { chat } from '../services/gemini';
+import { chat, extractKnowledgeFromChat } from '../services/gemini';
 import { knowledgeApi, experienceApi, planApi } from '../services/api';
 
 type ChatNav = NativeStackNavigationProp<RootStackParamList>;
-
-type ChatRoute = RouteProp<FieldTabParamList, 'Chat'>;
-
-const FIELD_ICONS: Record<string, string> = {
-  釣り: '🎣', 筋トレ: '💪', 読書: '📖', 料理: '🍳', 音楽: '🎵',
-  英語: '🌍', ゴルフ: '⛳', ランニング: '🏃',
-};
 
 const ACTION_THRESHOLD = 4;
 
@@ -150,24 +143,21 @@ export default function ChatScreen() {
     if (!activeField || actionLoading) return;
     setActionLoading('knowledge');
     try {
-      const history = messages.map(m => `${m.role === 'user' ? 'ユーザー' : 'AI'}: ${m.text}`).join('\n');
-      const systemPrompt = buildSystemPrompt(activeField, knowledge, experiences);
-      const summary = await chat(
-        'この会話から得られた重要な知識・洞察を1文で簡潔に表現してください。',
-        `${systemPrompt}\n\n【会話履歴】\n${history}`
-      );
-      const category = await chat(
-        'この知識のカテゴリを5文字以内で答えてください（例：タイミング、フォーム、回復）。',
-        `${systemPrompt}\n\n知識：${summary}`
-      );
+      const conversationText = messages
+        .map(m => `${m.role === 'user' ? 'ユーザー' : 'AI'}: ${m.text}`)
+        .join('\n');
+      const extracted = await extractKnowledgeFromChat(activeField, conversationText);
       await knowledgeApi.create({
         field: activeField,
-        category: category.trim().slice(0, 20),
-        content: summary,
+        category: extracted.category.slice(0, 20),
+        content: extracted.content,
         webSources: [], supportingExperiences: [], contradictingExperiences: [],
         confidenceScore: 0.3, status: 'hypothesis', tags: [],
       });
-      setMessages(prev => [...prev, { role: 'assistant', text: `知識として保存しました：\n${summary}` }]);
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        text: `知識として保存しました：\n「${extracted.content}」\nカテゴリ：${extracted.category}`,
+      }]);
     } catch (e) {
       console.error(e);
     } finally {

@@ -21,7 +21,7 @@ Web情報（断片・仮説の種）
 自分だけの体系化された知識
 ```
 
-一般的な情報収集ツールや日記アプリとの違いは、**Claudeが統合・対話を担うことで手間をかけずに知識が育つ**点。
+一般的な情報収集ツールや日記アプリとの違いは、**Geminiが統合・対話を担うことで手間をかけずに知識が育つ**点。
 
 ---
 
@@ -34,7 +34,7 @@ Web情報（断片・仮説の種）
 ② 経験ログ記録（軽量・摩擦ゼロ）
    仮説を意識しながら実践・記録
 
-③ Claude対話による統合（重量・深い問い）
+③ Gemini対話による統合（重量・深い問い）
    経験 × Web情報 × 知識プールを文脈に
    対話後にアクション選択肢を提示
      [ プラン提案 / グラフ表示 / 知識保存 ]
@@ -149,19 +149,19 @@ Web情報（断片・仮説の種）
 ## 入力コスト設計
 
 ### 基本方針
-> ユーザーの入力は「意思・感情・気づき」だけに集中させる。構造化はClaudeが担う。
+> ユーザーの入力は「意思・感情・気づき」だけに集中させる。構造化はGeminiが担う。
 
 ### 2モードの分離
 
 | モード | 場面 | 目標 |
 |-------|------|------|
 | 軽量モード | 経験ログ・アンケート・Web収集トリガー | 摩擦ゼロ・考えさせない |
-| 重量モード | Claude対話 | コストをかけて深く考える |
+| 重量モード | Gemini対話 | コストをかけて深く考える |
 
 ### 軽量モードの理想形
-- 経験ログ：分野タップ → 自己評価タップ → 完了（5秒以内）
+- 経験ログ：分野タップ → メモ入力 → 完了
 - アンケート：通知 → 開く → 選択肢タップ → 完了（10秒以内）
-- 「一言入力 → Claudeが構造化 → ユーザーが確認タップ」のパターンを基本とする
+- 「一言入力 → Geminiが構造化 → ユーザーが確認タップ」のパターンを基本とする
 
 ---
 
@@ -174,42 +174,13 @@ Web情報（断片・仮説の種）
 
 ## 技術スタック
 
-- Backend: Node.js + Express + TypeScript
-- Frontend: React Native（Expo）
-- DB: MongoDB Atlas
+- Backend: Node.js + Express + TypeScript（Vercel）
+- Mobile: React Native（Expo）
+- DB: MongoDB Atlas M0（無料固定）
 - AI: Google Gemini API（gemini-2.0-flash）
-- Web検索: Tavily API（検討中）
+- Web検索: 未定
 
----
-
-## ディレクトリ構成
-
-```
-project_gr/
-├── back/
-│   ├── models/
-│   │   ├── Experience.ts
-│   │   ├── Knowledge.ts
-│   │   ├── Plan.ts
-│   │   ├── ResearchResult.ts
-│   │   └── MetaKnowledge.ts
-│   ├── router/
-│   │   ├── experience.ts
-│   │   ├── knowledge.ts
-│   │   ├── plan.ts
-│   │   └── research.ts
-│   └── server.ts
-└── mobile/
-    └── src/
-        ├── screens/
-        │   ├── log/
-        │   ├── knowledge/
-        │   ├── dashboard/
-        │   └── plan/
-        └── components/
-            ├── charts/
-            └── dialogue/
-```
+詳細は [architecture.md](./architecture.md) を参照。
 
 ---
 
@@ -219,3 +190,4 @@ project_gr/
 - Knowledge の status フィールドの閾値設計
 - 可視化の具体的な手法
 - MVP対象分野・機能範囲の絞り込み
+- 分野データの永続化（現状はインメモリのみ）

@@ -9,11 +9,13 @@
 
 ## 技術スタック
 
-- Mobile: React Native（Expo）
-- Backend: Node.js + Express + TypeScript（Vercel、DBのCRUD APIのみ）
-- DB: MongoDB Atlas M0（無料固定）
-- AI: Google Gemini API（gemini-2.0-flash、モバイルから直叩き）
-- Web検索: 未定
+| 分類 | 技術 |
+|------|------|
+| Mobile | React Native（Expo） |
+| Backend | Node.js + Express + TypeScript（Vercel） |
+| DB | MongoDB Atlas M0（無料固定） |
+| AI | Google Gemini API（gemini-2.0-flash）|
+| Web検索 | 未定 |
 
 ---
 
@@ -26,33 +28,84 @@
 
 ---
 
-## ディレクトリ構成
+## ディレクトリ構成（現状）
 
 ```
 project_gr/
 ├── back/
-│   ├── models/
-│   │   ├── Experience.ts
-│   │   ├── Knowledge.ts
-│   │   ├── Plan.ts
-│   │   └── ResearchResult.ts
-│   ├── router/
-│   │   ├── experience.ts
-│   │   ├── knowledge.ts
-│   │   ├── plan.ts
-│   │   └── research.ts
-│   └── server.ts
+│   └── src/
+│       ├── models/
+│       │   ├── Experience.ts
+│       │   ├── Knowledge.ts
+│       │   ├── Plan.ts
+│       │   └── ResearchResult.ts
+│       ├── router/
+│       │   ├── experience.ts
+│       │   ├── knowledge.ts
+│       │   └── plan.ts
+│       └── server.ts
 └── mobile/
     └── src/
         ├── screens/
-        │   ├── log/
-        │   ├── knowledge/
-        │   ├── dashboard/
-        │   └── plan/
-        └── components/
-            ├── charts/
-            └── dialogue/
+        │   ├── DashboardScreen.tsx    # ホームタブ（分野タブ・知識ウィジェット・アンケート）
+        │   ├── KnowledgeScreen.tsx    # 知識一覧（カテゴリ別）
+        │   ├── KnowledgeCategoryScreen.tsx
+        │   ├── KnowledgeItemScreen.tsx
+        │   ├── ChatScreen.tsx         # Gemini対話
+        │   ├── PlanScreen.tsx         # 行動プラン管理
+        │   ├── LogScreen.tsx          # 経験ログ一覧
+        │   ├── QuickLogScreen.tsx     # モーダル・簡易ログ入力
+        │   ├── HomeScreen.tsx         # 分野選択（初期画面）
+        │   ├── WebScreen.tsx          # Web収集トリガー
+        │   └── SettingsScreen.tsx     # 設定（分野管理・アプリ情報）
+        ├── context/
+        │   └── FieldContext.tsx       # 分野状態（activeField・fields・追加削除）
+        ├── services/
+        │   ├── api.ts                 # バックエンドAPI呼び出し（experience / knowledge / plan）
+        │   └── gemini.ts              # Gemini API ラッパー
+        ├── constants/
+        │   ├── theme.ts               # colors / font / radius
+        │   └── mockData.ts            # 開発用モックデータ
+        └── types/                     # 共通型定義
 ```
+
+---
+
+## ナビゲーション構成
+
+```
+RootStack（NativeStack）
+├── FieldTabs（BottomTab）
+│   ├── Dashboard
+│   ├── Knowledge
+│   ├── _FieldLog（中央ボタン → QuickLog へ遷移）
+│   ├── Chat
+│   └── Plan
+├── Home
+├── Log
+├── KnowledgeCategory
+├── KnowledgeItem
+├── Web
+├── QuickLog（modal）
+└── Settings
+```
+
+`FieldProvider` は `FieldTabNavigator` 内にスコープされ、タブ間で `activeField` を共有する。
+
+---
+
+## バックエンドAPI（実装済み）
+
+| エンドポイント | メソッド | 説明 |
+|--------------|---------|------|
+| `/experiences` | GET / POST | 経験ログ一覧・作成 |
+| `/experiences/:id` | DELETE | 削除 |
+| `/knowledge` | GET / POST | 知識一覧・作成 |
+| `/knowledge/:id` | GET / PATCH / DELETE | 取得・更新・削除 |
+| `/plans` | GET / POST | プラン一覧・作成 |
+| `/plans/:id` | PATCH / DELETE | 更新・削除 |
+
+ホスト: `https://project-gr-back.vercel.app`
 
 ---
 
@@ -60,4 +113,5 @@ project_gr/
 
 - Web検索APIの選定（Tavily推奨）
 - 可視化の具体的な手法
-- MVP対象分野・機能範囲の絞り込み
+- ResearchResult の router 未実装（モデルのみ存在）
+- 分野データの永続化（現状は FieldContext のインメモリ状態のみ）

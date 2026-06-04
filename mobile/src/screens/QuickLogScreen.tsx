@@ -8,6 +8,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
 import { colors, font, radius } from '../constants/theme';
 import { experienceApi, knowledgeApi } from '../services/api';
+import { updateKnowledgeFromExperience } from '../services/gemini';
 import { XMarkIcon } from 'react-native-heroicons/outline';
 
 const FIELD_ICONS: Record<string, string> = {
@@ -45,6 +46,8 @@ export default function QuickLogScreen({ navigation }: Props) {
     const date = `${today.getMonth() + 1}/${today.getDate()}`;
     try {
       await experienceApi.create({ field: selectedField, date, memo: memo.trim() });
+      // 保存後、非同期で知識の確信度を更新（UIをブロックしない）
+      updateKnowledgeFromExperience(selectedField, memo.trim()).catch(console.error);
       navigation.goBack();
     } catch (e) {
       console.error(e);
