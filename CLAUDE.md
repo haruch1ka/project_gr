@@ -23,7 +23,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | Mobile | React Native（Expo） |
 | DB | MongoDB Atlas M0（無料固定） |
 | AI | Google Gemini API（gemini-2.0-flash） |
-| Web検索 | Tavily API（検討中） |
+| Web検索 | Tavily API（確定・クレカ不要・月1000クレジット無料） |
 
 **制約：無料かつクレジットカード登録不要のサービスのみ使用すること。**
 
@@ -80,9 +80,12 @@ project_gr/
 
 ## 設計上の重要な決定
 
+- **confidenceScoreの意味**：「この知識が一般的に正しいか」ではなく「このユーザーにとって正しいか」を示す。同じ知識でもユーザーによってスコアが異なる。個人プロファイルは不要で、事実の積み重ねで判断する。
 - **confidenceScore の更新ロジック**：経験1件で小幅増加、複数回再現で大幅増加。Geminiが証拠の尤度（高・中・低）を判断してスコアに変換する。閾値設計は未決定（[`docs/research/knowledge-verification-theory.md`](docs/research/knowledge-verification-theory.md) 参照）。
+- **経験ログとKnowledgeの紐付け**：ユーザーは「書くだけ」でよい。仮説を意識する必要はなく、Geminiが自動で関連Knowledgeに紐付ける。
 - **入力コスト設計**：軽量モード（経験ログ・アンケート）は摩擦ゼロが最優先。重量モード（Gemini対話）のみコストをかける。「一言入力 → Geminiが構造化 → ユーザーが確認タップ」がパターン。
 - **ランダムアンケート**：3〜14日のランダム周期でGeminiが動的生成。Meta-Knowledge抽出の素材にする。
+- **Web収集の役割分担**：Tavilyが情報収集、Geminiが思考・統合を担う。YouTube URLはGeminiが直接処理（Tavilyなし）。
 
 ---
 

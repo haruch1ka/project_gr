@@ -12,6 +12,7 @@ import {
 import { useField } from '../context/FieldContext';
 import { colors, font, radius } from '../constants/theme';
 import { saveGeminiKey, getGeminiKey, clearGeminiKey } from '../services/gemini';
+import { saveTavilyKey, getTavilyKey, clearTavilyKey } from '../services/tavily';
 
 const ICON_OPTIONS = ['🎣', '💪', '📖', '🎸', '🏊', '🧘', '🍳', '✏️', '🎾', '⚽', '🎨', '🎮'];
 
@@ -28,8 +29,15 @@ export default function SettingsScreen() {
   const [showKey,    setShowKey]    = useState(false);
   const [keySaving,  setKeySaving]  = useState(false);
 
+  // Tavily APIキー
+  const [tavilyInput,   setTavilyInput]   = useState('');
+  const [tavilyStored,  setTavilyStored]  = useState(false);
+  const [showTavily,    setShowTavily]    = useState(false);
+  const [tavilySaving,  setTavilySaving]  = useState(false);
+
   useEffect(() => {
     getGeminiKey().then(k => setKeyStored(!!k));
+    getTavilyKey().then(k => setTavilyStored(!!k));
   }, []);
 
   async function handleSaveKey() {
@@ -55,6 +63,34 @@ export default function SettingsScreen() {
           await clearGeminiKey();
           setKeyStored(false);
           setKeyInput('');
+        },
+      },
+    ]);
+  }
+
+  async function handleSaveTavilyKey() {
+    const trimmed = tavilyInput.trim();
+    if (!trimmed) return;
+    setTavilySaving(true);
+    try {
+      await saveTavilyKey(trimmed);
+      setTavilyStored(true);
+      setTavilyInput('');
+      Alert.alert('保存しました', 'Tavily APIキーを保存しました。');
+    } finally {
+      setTavilySaving(false);
+    }
+  }
+
+  async function handleClearTavilyKey() {
+    Alert.alert('削除確認', 'Tavily APIキーを削除しますか？', [
+      { text: 'キャンセル', style: 'cancel' },
+      {
+        text: '削除', style: 'destructive',
+        onPress: async () => {
+          await clearTavilyKey();
+          setTavilyStored(false);
+          setTavilyInput('');
         },
       },
     ]);
@@ -135,6 +171,49 @@ export default function SettingsScreen() {
                 style={[styles.keySaveBtn, (!keyInput.trim() || keySaving) && styles.keySaveBtnDisabled]}
                 onPress={handleSaveKey}
                 disabled={!keyInput.trim() || keySaving}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.keySaveBtnText}>保存</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
+        {/* Tavily APIキー */}
+        <Text style={styles.sectionLabel}>Tavily APIキー（Web検索）</Text>
+        <View style={styles.card}>
+          {tavilyStored ? (
+            <View style={styles.keyRow}>
+              <CheckCircleIcon size={18} color={colors.primary} strokeWidth={2} />
+              <Text style={styles.keySetText}>設定済み</Text>
+              <TouchableOpacity onPress={handleClearTavilyKey} style={styles.keyAction} activeOpacity={0.7}>
+                <Text style={styles.keyActionText}>削除</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.keyInputWrap}>
+              <View style={styles.keyInputRow}>
+                <TextInput
+                  style={styles.keyInput}
+                  value={tavilyInput}
+                  onChangeText={setTavilyInput}
+                  placeholder="tvly-..."
+                  placeholderTextColor={colors.textMuted}
+                  secureTextEntry={!showTavily}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <TouchableOpacity onPress={() => setShowTavily(v => !v)} style={styles.eyeBtn} activeOpacity={0.7}>
+                  {showTavily
+                    ? <EyeSlashIcon size={18} color={colors.textMuted} strokeWidth={2} />
+                    : <EyeIcon      size={18} color={colors.textMuted} strokeWidth={2} />
+                  }
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity
+                style={[styles.keySaveBtn, (!tavilyInput.trim() || tavilySaving) && styles.keySaveBtnDisabled]}
+                onPress={handleSaveTavilyKey}
+                disabled={!tavilyInput.trim() || tavilySaving}
                 activeOpacity={0.7}
               >
                 <Text style={styles.keySaveBtnText}>保存</Text>

@@ -116,6 +116,58 @@ export async function updateKnowledgeFromExperience(
   }
 }
 
+// ─── 仮説候補生成 ─────────────────────────────────────────────────────────
+
+import { TavilyResult } from './tavily';
+
+export type HypothesisCandidate = {
+  content:  string;
+  category: string;
+};
+
+/**
+ * Tavily検索結果またはYouTube URLからGeminiが仮説候補を生成する。
+ * YouTubeの場合はyoutubeUrlを渡す（Geminiが直接処理）。
+ */
+export async function generateHypotheses(
+  field:       string,
+  query:       string,
+  sources:     TavilyResult[],
+  youtubeUrl?: string,
+): Promise<HypothesisCandidate[]> {
+  let prompt: string;
+
+  if (youtubeUrl) {
+    prompt = `分野：${field}
+気になっていること：「${query}」
+YouTube動画URL：${youtubeUrl}
+
+上記の動画の内容を踏まえ、この分野で実践・検証できる仮説を3〜5件生成してください。
+各仮説は具体的な行動や観察に基づくものにしてください。
+
+以下のJSON配列で返してください：
+[{"content":"<仮説を1文で>","category":"<カテゴリ（10文字以内）>"}]`;
+  } else {
+    const sourcesText = sources
+      .map((s, i) => `[${i + 1}] ${s.title}\n${s.snippet}`)
+      .join('\n\n');
+
+    prompt = `分野：${field}
+気になっていること：「${query}」
+
+以下のWeb情報を参考に、この分野で実践・検証できる仮説を3〜5件生成してください。
+各仮説は具体的な行動や観察に基づくものにしてください。
+
+Web情報：
+${sourcesText}
+
+以下のJSON配列で返してください：
+[{"content":"<仮説を1文で>","category":"<カテゴリ（10文字以内）>"}]`;
+  }
+
+  return chatJSON<HypothesisCandidate[]>(prompt);
+}
+
 // ─── 対話からの構造化知識抽出 ─────────────────────────────────────────────
 
 type ExtractedKnowledge = {

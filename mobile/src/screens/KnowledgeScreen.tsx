@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, font, radius } from '../constants/theme';
-import { TrashIcon } from 'react-native-heroicons/outline';
+import { TrashIcon, LightBulbIcon } from 'react-native-heroicons/outline';
 import { knowledgeApi } from '../services/api';
 import { Knowledge } from '../types';
 import { RootStackParamList } from '../../App';
@@ -81,7 +81,7 @@ function KnowledgeItem({ item, onDelete }: { item: Knowledge; onDelete: (id: str
   const handleDelete = () => {
     if (!item._id) return;
     Animated.timing(translateX, { toValue: -500, duration: 180, useNativeDriver: true }).start(async () => {
-      try { await knowledgeApi.delete(item._id!); } catch {}
+      try { await knowledgeApi.remove(item._id!); } catch {}
       onDelete(item._id!);
     });
   };
@@ -183,6 +183,15 @@ export default function KnowledgeScreen() {
           )}
 
           <TouchableOpacity
+            style={styles.hypothesisBtn}
+            onPress={() => navigation.navigate('Hypothesis', { field })}
+            activeOpacity={0.8}
+          >
+            <LightBulbIcon size={16} color="#000" strokeWidth={2} />
+            <Text style={styles.hypothesisBtnText}>気になることから仮説を生成</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
             style={styles.addCategoryBtn}
             onPress={() => navigation.navigate('KnowledgeCategory', { field, category: '新しいカテゴリ' })}
           >
@@ -249,8 +258,16 @@ const styles = StyleSheet.create({
   emptyText:   { fontSize: font.md, color: colors.textMuted, fontWeight: '500' },
   emptySub:    { fontSize: font.sm, color: colors.textSecondary },
 
+  hypothesisBtn: {
+    marginTop: 16, borderRadius: radius.md,
+    backgroundColor: colors.primary,
+    padding: 14, alignItems: 'center',
+    flexDirection: 'row', justifyContent: 'center', gap: 8,
+  },
+  hypothesisBtnText: { color: '#000', fontSize: font.sm, fontWeight: '700' },
+
   addCategoryBtn: {
-    marginTop: 16, borderRadius: radius.md, borderWidth: 1.5,
+    marginTop: 8, borderRadius: radius.md, borderWidth: 1.5,
     borderStyle: 'dashed', borderColor: colors.border,
     padding: 14, alignItems: 'center',
   },

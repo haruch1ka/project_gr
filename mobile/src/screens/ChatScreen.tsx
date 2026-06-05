@@ -177,7 +177,7 @@ export default function ChatScreen() {
           contentContainerStyle={styles.messageList}
           onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
           renderItem={({ item }) => (
-            <View style={[styles.bubble, item.role === 'user' ? styles.bubbleUser : styles.bubbleAI]}>
+            <View style={[styles.bubble, item.role === 'user' ? styles.bubbleUser : styles.bubbleBot]}>
               <Text style={[styles.bubbleText, item.role === 'user' && styles.bubbleTextUser]}>
                 {item.text}
               </Text>
@@ -270,6 +270,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgCard, alignSelf: 'flex-start',
   },
   bubbleUser:     { backgroundColor: colors.primary, alignSelf: 'flex-end' },
+  bubbleBot:      { backgroundColor: colors.bgAI },
   bubbleText:     { fontSize: font.md, color: colors.text, lineHeight: 22 },
   bubbleTextUser: { color: '#fff' },
 

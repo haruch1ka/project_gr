@@ -28,6 +28,7 @@ import PlanScreen from './src/screens/PlanScreen';
 import LogScreen from './src/screens/LogScreen';
 import QuickLogScreen from './src/screens/QuickLogScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
+import HypothesisScreen from './src/screens/HypothesisScreen';
 import { FieldProvider, useField } from './src/context/FieldContext';
 
 // ─── 型定義 ──────────────────────────────────────────────────────────────────
@@ -41,6 +42,7 @@ export type RootStackParamList = {
   Web:               { field: string };
   QuickLog:          { field?: string; fields?: { name: string; icon: string }[] };
   Settings:          undefined;
+  Hypothesis:        { field: string };
 };
 
 export type FieldTabParamList = {
@@ -179,7 +181,8 @@ export default function App() {
             component={QuickLogScreen}
             options={{ presentation: 'transparentModal', animation: 'slide_from_bottom' }}
           />
-          <Stack.Screen name="Settings" component={SettingsScreen} />
+          <Stack.Screen name="Settings"   component={SettingsScreen} />
+          <Stack.Screen name="Hypothesis" component={HypothesisScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>
