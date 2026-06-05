@@ -6,6 +6,7 @@ import mongoose from 'mongoose';
 import experienceRouter from './router/experience';
 import knowledgeRouter  from './router/knowledge';
 import planRouter       from './router/plan';
+import fieldRouter      from './router/field';
 
 const app  = express();
 const PORT = process.env.PORT ?? 3000;
@@ -16,6 +17,7 @@ app.use(express.json());
 app.use('/experiences', experienceRouter);
 app.use('/knowledge',   knowledgeRouter);
 app.use('/plans',       planRouter);
+app.use('/fields',      fieldRouter);
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
 

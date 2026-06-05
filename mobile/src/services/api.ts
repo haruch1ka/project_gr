@@ -1,4 +1,4 @@
-import { Experience, Knowledge, Plan } from '../types';
+import { Experience, Knowledge, Plan, Field } from '../types';
 
 const BASE_URL = 'https://project-gr-back.vercel.app';
 
@@ -34,6 +34,14 @@ export const knowledgeApi = {
     request<Knowledge>(`/knowledge/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   remove: (id: string) =>
     request<{ ok: boolean }>(`/knowledge/${id}`, { method: 'DELETE' }),
+};
+
+export const fieldApi = {
+  list: () => request<Field[]>('/fields'),
+  create: (body: Omit<Field, '_id'>) =>
+    request<Field>('/fields', { method: 'POST', body: JSON.stringify(body) }),
+  remove: (id: string) =>
+    request<{ ok: boolean }>(`/fields/${id}`, { method: 'DELETE' }),
 };
 
 export const planApi = {

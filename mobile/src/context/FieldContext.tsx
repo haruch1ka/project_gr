@@ -1,45 +1,63 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { mockFields } from '../constants/mockData';
-
-type Field = { name: string; icon: string };
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { Field } from '../types';
+import { fieldApi } from '../services/api';
 
 type FieldContextType = {
   activeField: string;
   setActiveField: (field: string) => void;
   fields: Field[];
-  addField: (field: Field) => void;
-  removeField: (name: string) => void;
+  loading: boolean;
+  addField: (field: Omit<Field, '_id'>) => Promise<void>;
+  removeField: (id: string) => Promise<void>;
 };
 
 const FieldContext = createContext<FieldContextType>({
-  activeField: mockFields[0]?.name ?? '',
+  activeField: '',
   setActiveField: () => {},
-  fields: mockFields,
-  addField: () => {},
-  removeField: () => {},
+  fields: [],
+  loading: true,
+  addField: async () => {},
+  removeField: async () => {},
 });
 
 export function FieldProvider({ initialField, children }: {
   initialField?: string;
   children: ReactNode;
 }) {
-  const [fields, setFields] = useState<Field[]>(mockFields);
-  const [activeField, setActiveField] = useState(initialField ?? mockFields[0]?.name ?? '');
+  const [fields, setFields] = useState<Field[]>([]);
+  const [activeField, setActiveField] = useState(initialField ?? '');
+  const [loading, setLoading] = useState(true);
 
-  const addField = (field: Field) => {
-    setFields(prev => [...prev, field]);
+  useEffect(() => {
+    fieldApi.list()
+      .then(data => {
+        setFields(data);
+        if (!activeField && data.length > 0) setActiveField(data[0].name);
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  const addField = async (field: Omit<Field, '_id'>) => {
+    const created = await fieldApi.create(field);
+    setFields(prev => [...prev, created]);
+    if (!activeField) setActiveField(created.name);
   };
 
-  const removeField = (name: string) => {
+  const removeField = async (id: string) => {
+    await fieldApi.remove(id);
     setFields(prev => {
-      const next = prev.filter(f => f.name !== name);
-      if (activeField === name) setActiveField(next[0]?.name ?? '');
+      const next = prev.filter(f => f._id !== id);
+      const removed = prev.find(f => f._id === id);
+      if (removed && activeField === removed.name) {
+        setActiveField(next[0]?.name ?? '');
+      }
       return next;
     });
   };
 
   return (
-    <FieldContext.Provider value={{ activeField, setActiveField, fields, addField, removeField }}>
+    <FieldContext.Provider value={{ activeField, setActiveField, fields, loading, addField, removeField }}>
       {children}
     </FieldContext.Provider>
   );

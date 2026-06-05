@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  ScrollView, Modal, TextInput,
+  ScrollView, Modal, TextInput, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Polyline, Circle, G } from 'react-native-svg';
@@ -9,7 +9,8 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
 import { colors, font, radius } from '../constants/theme';
-import { mockFields, mockKnowledge, mockExperiences } from '../constants/mockData';
+import { mockKnowledge, mockExperiences } from '../constants/mockData';
+import { useField } from '../context/FieldContext';
 import { Field } from '../types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -149,21 +150,29 @@ function KnowledgeStatusChart({ fields }: { fields: Field[] }) {
 
 export default function HomeScreen() {
   const navigation = useNavigation<Nav>();
-  const [fields, setFields] = useState<Field[]>(mockFields);
+  const { fields, loading, addField } = useField();
   const [modalVisible, setModalVisible] = useState(false);
   const [newName, setNewName] = useState('');
   const [newIcon, setNewIcon] = useState('🎯');
+  const [saving, setSaving] = useState(false);
 
   const today = new Date().toLocaleDateString('ja-JP', {
     year: 'numeric', month: 'long', day: 'numeric', weekday: 'short',
   });
 
-  function addField() {
-    if (!newName.trim()) return;
-    setFields([...fields, { name: newName.trim(), icon: newIcon }]);
-    setNewName('');
-    setNewIcon('🎯');
-    setModalVisible(false);
+  async function handleAddField() {
+    if (!newName.trim() || saving) return;
+    setSaving(true);
+    try {
+      await addField({ name: newName.trim(), icon: newIcon });
+      setNewName('');
+      setNewIcon('🎯');
+      setModalVisible(false);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -200,6 +209,7 @@ export default function HomeScreen() {
 
         {/* 分野カード */}
         <Text style={styles.sectionTitle}>分野</Text>
+        {loading && <ActivityIndicator color={colors.primary} style={{ marginBottom: 12 }} />}
         {fields.map(field => {
           const fieldKnowledge = mockKnowledge.filter(k => k.field === field.name);
           const kCount = fieldKnowledge.length;
@@ -270,8 +280,11 @@ export default function HomeScreen() {
               <TouchableOpacity onPress={() => setModalVisible(false)}>
                 <Text style={styles.cancelBtn}>キャンセル</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.addBtn} onPress={addField}>
-                <Text style={styles.addBtnText}>追加</Text>
+              <TouchableOpacity style={[styles.addBtn, saving && { opacity: 0.5 }]} onPress={handleAddField} disabled={saving}>
+                {saving
+                  ? <ActivityIndicator color="#000" size="small" />
+                  : <Text style={styles.addBtnText}>追加</Text>
+                }
               </TouchableOpacity>
             </View>
           </View>
