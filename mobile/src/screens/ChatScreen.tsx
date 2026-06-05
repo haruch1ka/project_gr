@@ -10,7 +10,7 @@ import { RootStackParamList } from '../../App';
 import { useField } from '../context/FieldContext';
 import { colors, font, radius } from '../constants/theme';
 import { ChatMessage, Knowledge, Experience } from '../types';
-import { chat, extractKnowledgeFromChat, generateOpeningQuestion } from '../services/gemini';
+import { chatWithHistory, extractKnowledgeFromChat, generateOpeningQuestion } from '../services/gemini';
 import { knowledgeApi, experienceApi, planApi } from '../services/api';
 
 type ChatNav = NativeStackNavigationProp<RootStackParamList>;
@@ -99,11 +99,8 @@ export default function ChatScreen() {
     setLoading(true);
 
     try {
-      const history = newMessages.slice(-6)
-        .map(m => `${m.role === 'user' ? 'ユーザー' : 'AI'}: ${m.text}`)
-        .join('\n');
       const systemPrompt = buildSystemPrompt(activeField, knowledge, experiences);
-      const reply = await chat(`ユーザー: ${text}\nAI:`, `${systemPrompt}\n\n【会話履歴】\n${history}`);
+      const reply = await chatWithHistory(newMessages.slice(-8), systemPrompt);
       const updated: ChatMessage[] = [...newMessages, { role: 'assistant', text: reply }];
       setMessages(updated);
       if (updated.length >= ACTION_THRESHOLD) setShowActions(true);
