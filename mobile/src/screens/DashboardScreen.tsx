@@ -12,7 +12,6 @@ import { colors, font, radius } from '../constants/theme';
 import { Cog6ToothIcon } from 'react-native-heroicons/outline';
 import { knowledgeApi, planApi } from '../services/api';
 import { Knowledge, Plan } from '../types';
-import { mockExperiences } from '../constants/mockData';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -27,13 +26,6 @@ const STATUS_LABEL: Record<Knowledge['status'], string> = {
   hypothesis: '仮説',
   disproved:  '反証',
 };
-
-const SURVEY_Q: Record<string, string> = {
-  '釣り':  '前回「朝マズメ×中層レンジ」を試しましたね。結果はどうでしたか？',
-  '筋トレ':'前回のベンチプレスでフォームを意識しましたか？',
-  '読書':  '前回の読書で気づいたことを実践しましたか？',
-};
-const SURVEY_OPTS = ['効果あり', '変化なし', '逆効果'] as const;
 
 // ─── サブコンポーネント ─────────────────────────────────────────────────
 
@@ -73,45 +65,6 @@ const ft = StyleSheet.create({
 });
 
 
-function SurveyCard({ field }: { field: string }) {
-  const q = SURVEY_Q[field];
-  if (!q) return null;
-  const [answered, setAnswered] = useState<string | null>(null);
-
-  if (answered) {
-    return (
-      <View style={sv.card}>
-        <Text style={sv.thanks}>✓ 回答済み —「{answered}」</Text>
-      </View>
-    );
-  }
-  return (
-    <View style={sv.card}>
-      <View style={sv.top}>
-        <Text style={sv.badge}>アンケート</Text>
-        <Text style={sv.q}>{q}</Text>
-      </View>
-      <View style={sv.btns}>
-        {SURVEY_OPTS.map(opt => (
-          <TouchableOpacity key={opt} style={sv.btn} onPress={() => setAnswered(opt)} activeOpacity={0.7}>
-            <Text style={sv.btnText}>{opt}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-    </View>
-  );
-}
-
-const sv = StyleSheet.create({
-  card:   { backgroundColor: colors.bgCard, borderRadius: radius.md, padding: 14, gap: 10 },
-  top:    { gap: 6 },
-  badge:  { fontSize: font.xs, color: colors.amber, fontWeight: '700' },
-  q:      { fontSize: font.sm, color: colors.text, lineHeight: 20 },
-  btns:   { flexDirection: 'row', gap: 8 },
-  btn:    { flex: 1, backgroundColor: colors.bg, borderRadius: radius.sm, paddingVertical: 9, alignItems: 'center', borderWidth: 1, borderColor: colors.border },
-  btnText:{ fontSize: font.sm, color: colors.text, fontWeight: '500' },
-  thanks: { fontSize: font.sm, color: colors.primary, textAlign: 'center', paddingVertical: 4 },
-});
 
 // ─── メインスクリーン ──────────────────────────────────────────────────────
 
@@ -166,9 +119,6 @@ export default function DashboardScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>
-
-        {/* アンケート */}
-        <SurveyCard key={activeField} field={activeField} />
 
           {/* 知識ウィジェット */}
           <View style={styles.widget}>
