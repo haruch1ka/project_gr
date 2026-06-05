@@ -1,5 +1,5 @@
 import * as SecureStore from 'expo-secure-store';
-import { Knowledge } from '../types';
+import { Knowledge, Experience } from '../types';
 import { knowledgeApi } from './api';
 
 const MODEL = 'gemini-2.0-flash';
@@ -193,4 +193,56 @@ ${conversationText}
 {"content":"<知識を1文で>","category":"<カテゴリ（10文字以内）>"}`;
 
   return chatJSON<ExtractedKnowledge>(prompt);
+}
+
+// ─── 対話の開口質問生成 ───────────────────────────────────────────────────
+
+const QUESTION_ANGLES = [
+  '最近「これは効いた」と感じた行動はありますか？',
+  'やる気が出なかった時、何が原因だったか振り返れますか？',
+  '直近の取り組みで予想外だったことはありましたか？',
+  '最近無視していた仮説や知識はありますか？',
+  '今停滞を感じていることがあれば、その理由の仮説を聞かせてください。',
+  '次に試してみたいことはありますか？',
+  '今の自分に一番足りていないと感じるものは何ですか？',
+  '最近の経験から、別の分野にも使えそうな気づきはありましたか？',
+];
+
+export async function generateOpeningQuestion(
+  field: string,
+  experiences: Experience[],
+  knowledgeSummary: { verified: number; hypothesis: number; disproved: number },
+): Promise<string> {
+  const recentMemos = experiences
+    .slice(0, 3)
+    .map(e => `・${e.date}: ${e.memo}`)
+    .join('\n');
+
+  const angles = QUESTION_ANGLES.join('\n');
+
+  const prompt = `ユーザーの「${field}」分野の最近の状況：
+
+【直近の経験ログ】
+${recentMemos || '（まだログなし）'}
+
+【知識の状態】
+検証済: ${knowledgeSummary.verified}件 / 仮説: ${knowledgeSummary.hypothesis}件 / 反証: ${knowledgeSummary.disproved}件
+
+以下の問いかけの観点から、この状況に最も合うものを一つ選び、
+経験ログの内容を具体的に織り交ぜた自然な一文の問いかけを生成してください。
+
+【観点】
+${angles}
+
+条件：
+- 一文のみ
+- 話しかけるトーン（「〜ですか？」「〜ましたか？」）
+- 経験ログの具体的な内容（日付・メモ）を文中に入れる
+- ログがない場合は観点をそのまま使う`;
+
+  try {
+    return await chat(prompt);
+  } catch {
+    return `${field}について、最近の経験や疑問を話してください。一緒に整理しましょう。`;
+  }
 }
