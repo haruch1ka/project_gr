@@ -10,7 +10,7 @@ import { RootStackParamList } from '../../App';
 import { useField } from '../context/FieldContext';
 import { colors, font, radius } from '../constants/theme';
 import { ChatMessage, Knowledge, Experience } from '../types';
-import { chat, extractKnowledgeFromChat } from '../services/gemini';
+import { chatWithHistory, extractKnowledgeFromChat, generateOpeningQuestion } from '../services/gemini';
 import { knowledgeApi, experienceApi, planApi } from '../services/api';
 
 type ChatNav = NativeStackNavigationProp<RootStackParamList>;
@@ -51,25 +51,19 @@ export default function ChatScreen() {
 
   const [knowledge,  setKnowledge]  = useState<Knowledge[]>([]);
   const [experiences, setExperiences] = useState<Experience[]>([]);
-  const [messages,   setMessages]   = useState<ChatMessage[]>([
-    { role: 'assistant', text: `${activeField}について、最近の経験や疑問を話してください。一緒に整理しましょう。` },
-  ]);
+  const [messages,   setMessages]   = useState<ChatMessage[]>([]);
   const [input,          setInput]          = useState('');
   const [loading,        setLoading]        = useState(false);
-  const [contextLoading, setContextLoading] = useState(false);
+  const [contextLoading, setContextLoading] = useState(true);
   const [showActions,    setShowActions]    = useState(false);
   const [actionLoading,  setActionLoading]  = useState<string | null>(null);
   const listRef = useRef<FlatList>(null);
 
-  // 分野が変わったらメッセージをリセット
-  useEffect(() => {
-    setMessages([{ role: 'assistant', text: `${activeField}について、最近の経験や疑問を話してください。一緒に整理しましょう。` }]);
-    setShowActions(false);
-  }, [activeField]);
-
-  // コンテキスト取得
+  // コンテキスト取得 → 開口質問生成
   const fetchContext = useCallback(async (field: string) => {
     setContextLoading(true);
+    setMessages([]);
+    setShowActions(false);
     try {
       const [k, e] = await Promise.all([
         knowledgeApi.list({ field }),
@@ -77,8 +71,19 @@ export default function ChatScreen() {
       ]);
       setKnowledge(k);
       setExperiences(e);
-    } catch (e) { console.error(e); }
-    finally { setContextLoading(false); }
+
+      const summary = {
+        verified:   k.filter(x => x.status === 'verified').length,
+        hypothesis: k.filter(x => x.status === 'hypothesis').length,
+        disproved:  k.filter(x => x.status === 'disproved').length,
+      };
+      const opening = await generateOpeningQuestion(field, e, summary);
+      setMessages([{ role: 'assistant', text: opening }]);
+    } catch {
+      setMessages([{ role: 'assistant', text: `${field}について、最近の経験や疑問を話してください。一緒に整理しましょう。` }]);
+    } finally {
+      setContextLoading(false);
+    }
   }, []);
 
   useEffect(() => { fetchContext(activeField); }, [activeField, fetchContext]);
@@ -94,11 +99,8 @@ export default function ChatScreen() {
     setLoading(true);
 
     try {
-      const history = newMessages.slice(-6)
-        .map(m => `${m.role === 'user' ? 'ユーザー' : 'AI'}: ${m.text}`)
-        .join('\n');
       const systemPrompt = buildSystemPrompt(activeField, knowledge, experiences);
-      const reply = await chat(`ユーザー: ${text}\nAI:`, `${systemPrompt}\n\n【会話履歴】\n${history}`);
+      const reply = await chatWithHistory(newMessages.slice(-8), systemPrompt);
       const updated: ChatMessage[] = [...newMessages, { role: 'assistant', text: reply }];
       setMessages(updated);
       if (updated.length >= ACTION_THRESHOLD) setShowActions(true);
