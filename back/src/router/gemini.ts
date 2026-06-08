@@ -1,11 +1,11 @@
-import { Router, Request, Response } from 'express';
+import { Router } from 'express';
 
 const router = Router();
 
-const MODEL   = 'gemini-2.0-flash';
+const MODEL   = 'gemini-flash-latest';
 const BASE_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}`;
 
-router.post('/generate', async (req: Request, res: Response) => {
+router.post('/generate', async (req, res) => {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     res.status(500).json({ error: 'GEMINI_API_KEY が未設定です' });
@@ -37,7 +37,7 @@ router.post('/generate', async (req: Request, res: Response) => {
     return;
   }
 
-  const data = await geminiRes.json();
+  const data = await geminiRes.json() as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
   res.json({ text });
 });
