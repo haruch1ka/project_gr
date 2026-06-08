@@ -111,7 +111,36 @@ RootStack（NativeStack）
 
 ## 未決事項
 
-- Web検索APIの選定（Tavily推奨）
 - 可視化の具体的な手法
 - ResearchResult の router 未実装（モデルのみ存在）
 - 分野データの永続化（現状は FieldContext のインメモリ状態のみ）
+
+---
+
+## Mobile ネイティブ層（Android）
+
+### バージョン
+
+| 項目 | 値 |
+|------|----|
+| React Native | 0.85.3 |
+| Expo SDK | 56.0.x |
+| React | 19.2.3 |
+| JSエンジン | Hermes |
+| アーキテクチャ | New Architecture（Bridgeless / Fabric）有効 |
+| Expo ワークフロー | Bare（`android/` を git 管理） |
+
+### Android ビルド設定
+
+| 項目 | 値 |
+|------|----|
+| compileSdk / targetSdk | 36（Android 16） |
+| minSdk | 24（Android 7.0） |
+| 対象 ABI | armeabi-v7a, arm64-v8a, x86, x86_64 |
+| Kotlin | 2.1.20 |
+
+### 注意事項
+
+- `MainApplication.kt` は Expo SDK 56 方式（`ExpoReactHostFactory`）で実装済み。旧方式の `ReactNativeHostWrapper` は SDK 56 で削除されているため使用不可。
+- `npx expo prebuild --clean` を実行すると `android/` が再生成され、上記の修正が失われる。実行後は再適用が必要。
+- Web検索は Tavily API を採用（`src/services/tavily.ts` 実装済み）。

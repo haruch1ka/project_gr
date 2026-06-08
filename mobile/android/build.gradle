@@ -29,13 +29,3 @@ apply plugin: "com.facebook.react.rootproject"
 
 // CMake オブジェクトファイルのパス長制限（250文字）を回避するため、
 // ビルド出力先を短いパスに変更する
-subprojects {
-    afterEvaluate { project ->
-        if (project.plugins.hasPlugin('com.android.library') || project.plugins.hasPlugin('com.android.application')) {
-            def cmakeBuild = project.android.externalNativeBuild.cmake
-            if (cmakeBuild.path.orNull != null) {
-                cmakeBuild.buildStagingDirectory = new File("D:/cxx/${project.name}")
-            }
-        }
-    }
-}

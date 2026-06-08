@@ -11,7 +11,6 @@ import {
 } from 'react-native-heroicons/outline';
 import { useField } from '../context/FieldContext';
 import { colors, font, radius } from '../constants/theme';
-import { saveGeminiKey, getGeminiKey, clearGeminiKey } from '../services/gemini';
 import { saveTavilyKey, getTavilyKey, clearTavilyKey } from '../services/tavily';
 
 const ICON_OPTIONS = ['🎣', '💪', '📖', '🎸', '🏊', '🧘', '🍳', '✏️', '🎾', '⚽', '🎨', '🎮'];
@@ -23,12 +22,6 @@ export default function SettingsScreen() {
   const [newName,       setNewName]       = useState('');
   const [selectedIcon,  setSelectedIcon]  = useState(ICON_OPTIONS[0]);
 
-  // Gemini APIキー
-  const [keyInput,   setKeyInput]   = useState('');
-  const [keyStored,  setKeyStored]  = useState(false);
-  const [showKey,    setShowKey]    = useState(false);
-  const [keySaving,  setKeySaving]  = useState(false);
-
   // Tavily APIキー
   const [tavilyInput,   setTavilyInput]   = useState('');
   const [tavilyStored,  setTavilyStored]  = useState(false);
@@ -36,37 +29,8 @@ export default function SettingsScreen() {
   const [tavilySaving,  setTavilySaving]  = useState(false);
 
   useEffect(() => {
-    getGeminiKey().then(k => setKeyStored(!!k));
     getTavilyKey().then(k => setTavilyStored(!!k));
   }, []);
-
-  async function handleSaveKey() {
-    const trimmed = keyInput.trim();
-    if (!trimmed) return;
-    setKeySaving(true);
-    try {
-      await saveGeminiKey(trimmed);
-      setKeyStored(true);
-      setKeyInput('');
-      Alert.alert('保存しました', 'Gemini APIキーを保存しました。');
-    } finally {
-      setKeySaving(false);
-    }
-  }
-
-  async function handleClearKey() {
-    Alert.alert('削除確認', 'APIキーを削除しますか？', [
-      { text: 'キャンセル', style: 'cancel' },
-      {
-        text: '削除', style: 'destructive',
-        onPress: async () => {
-          await clearGeminiKey();
-          setKeyStored(false);
-          setKeyInput('');
-        },
-      },
-    ]);
-  }
 
   async function handleSaveTavilyKey() {
     const trimmed = tavilyInput.trim();
@@ -135,49 +99,6 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>
-
-        {/* Gemini APIキー */}
-        <Text style={styles.sectionLabel}>Gemini APIキー</Text>
-        <View style={styles.card}>
-          {keyStored ? (
-            <View style={styles.keyRow}>
-              <CheckCircleIcon size={18} color={colors.primary} strokeWidth={2} />
-              <Text style={styles.keySetText}>設定済み</Text>
-              <TouchableOpacity onPress={handleClearKey} style={styles.keyAction} activeOpacity={0.7}>
-                <Text style={styles.keyActionText}>削除</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View style={styles.keyInputWrap}>
-              <View style={styles.keyInputRow}>
-                <TextInput
-                  style={styles.keyInput}
-                  value={keyInput}
-                  onChangeText={setKeyInput}
-                  placeholder="AIzaSy..."
-                  placeholderTextColor={colors.textMuted}
-                  secureTextEntry={!showKey}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-                <TouchableOpacity onPress={() => setShowKey(v => !v)} style={styles.eyeBtn} activeOpacity={0.7}>
-                  {showKey
-                    ? <EyeSlashIcon size={18} color={colors.textMuted} strokeWidth={2} />
-                    : <EyeIcon      size={18} color={colors.textMuted} strokeWidth={2} />
-                  }
-                </TouchableOpacity>
-              </View>
-              <TouchableOpacity
-                style={[styles.keySaveBtn, (!keyInput.trim() || keySaving) && styles.keySaveBtnDisabled]}
-                onPress={handleSaveKey}
-                disabled={!keyInput.trim() || keySaving}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.keySaveBtnText}>保存</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
 
         {/* Tavily APIキー */}
         <Text style={styles.sectionLabel}>Tavily APIキー（Web検索）</Text>

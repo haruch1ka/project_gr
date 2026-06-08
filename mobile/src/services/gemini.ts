@@ -1,59 +1,28 @@
-import * as SecureStore from 'expo-secure-store';
 import { Knowledge, Experience } from '../types';
 import { knowledgeApi } from './api';
 import { TavilyResult } from './tavily';
 
-const MODEL   = 'gemini-2.0-flash';
-const BASE_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}`;
+const BACK_URL = 'https://project-gr-back.vercel.app';
 
 type GeminiMessage = { role: 'user' | 'model'; parts: [{ text: string }] };
-
-// ─── 低レベル呼び出し ─────────────────────────────────────────────────────
-
-async function getApiKey(): Promise<string> {
-  const key = await SecureStore.getItemAsync('GEMINI_API_KEY');
-  if (!key) throw new Error('Gemini API Key未設定');
-  return key;
-}
 
 async function callGemini(
   messages: GeminiMessage[],
   systemInstruction?: string,
   jsonMode = false,
 ): Promise<string> {
-  const apiKey = await getApiKey();
-
-  const body: Record<string, unknown> = { contents: messages };
-  if (systemInstruction) {
-    body.system_instruction = { parts: [{ text: systemInstruction }] };
-  }
-  if (jsonMode) {
-    body.generationConfig = { response_mime_type: 'application/json' };
-  }
-
-  const res = await fetch(`${BASE_URL}:generateContent?key=${apiKey}`, {
-    method: 'POST',
+  const res = await fetch(`${BACK_URL}/gemini/generate`, {
+    method:  'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    body:    JSON.stringify({ messages, systemInstruction, jsonMode }),
   });
   if (!res.ok) throw new Error(`Gemini error: ${res.status}`);
   const data = await res.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+  return data.text ?? '';
 }
 
 // ─── 公開API ─────────────────────────────────────────────────────────────
 
-export async function saveGeminiKey(apiKey: string) {
-  await SecureStore.setItemAsync('GEMINI_API_KEY', apiKey);
-}
-export async function getGeminiKey(): Promise<string | null> {
-  return SecureStore.getItemAsync('GEMINI_API_KEY');
-}
-export async function clearGeminiKey() {
-  await SecureStore.deleteItemAsync('GEMINI_API_KEY');
-}
-
-// 単発の問いかけ（system_instruction を明示的に分離）
 export async function chat(prompt: string, systemInstruction = ''): Promise<string> {
   return callGemini(
     [{ role: 'user', parts: [{ text: prompt }] }],
@@ -61,13 +30,10 @@ export async function chat(prompt: string, systemInstruction = ''): Promise<stri
   );
 }
 
-// マルチターン対話（ChatScreen 用）
-// ChatMessage[] をそのまま渡せば Gemini の contents に変換する
 export async function chatWithHistory(
   messages: Array<{ role: 'user' | 'assistant'; text: string }>,
   systemInstruction: string,
 ): Promise<string> {
-  // user から始まる連続した alternating sequence を構築
   const firstUser = messages.findIndex(m => m.role === 'user');
   const valid = firstUser >= 0 ? messages.slice(firstUser) : messages;
 
@@ -79,7 +45,6 @@ export async function chatWithHistory(
   return callGemini(contents, systemInstruction);
 }
 
-// 構造化 JSON 出力（response_mime_type: application/json で正規表現不要）
 async function chatJSON<T>(prompt: string, systemInstruction?: string): Promise<T> {
   const text = await callGemini(
     [{ role: 'user', parts: [{ text: prompt }] }],

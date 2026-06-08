@@ -8,6 +8,7 @@ import experienceRouter from './router/experience';
 import knowledgeRouter  from './router/knowledge';
 import planRouter       from './router/plan';
 import fieldRouter      from './router/field';
+import geminiRouter     from './router/gemini';
 
 const app  = express();
 const PORT = process.env.PORT ?? 3000;
@@ -19,6 +20,7 @@ app.use('/experiences', experienceRouter);
 app.use('/knowledge',   knowledgeRouter);
 app.use('/plans',       planRouter);
 app.use('/fields',      fieldRouter);
+app.use('/gemini',      geminiRouter);
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
