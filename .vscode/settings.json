@@ -1,0 +1,25 @@
+{
+  "files.watcherExclude": {
+    "**/.git/objects/**": true,
+    "**/.git/subtree-cache/**": true,
+    "**/node_modules/**": true,
+    "**/.expo/**": true,
+    "**/mobile/android/.gradle/**": true,
+    "**/mobile/android/app/build/**": true,
+    "**/mobile/android/build/**": true,
+    "**/.yarn/**": true
+  },
+  "files.exclude": {
+    "**/.expo": true,
+    "**/node_modules": true
+  },
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/.expo": true,
+    "**/mobile/android/build": true,
+    "**/mobile/android/.gradle": true,
+    "**/pnpm-lock.yaml": true
+  },
+  "git.ignoreLimitWarning": true,
+  "git.decorations.enabled": true
+}
