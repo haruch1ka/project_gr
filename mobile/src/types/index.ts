@@ -21,11 +21,21 @@ export type ResearchResult = {
   usedInKnowledgeIds: string[];
 };
 
+export type KnowledgeFolder = {
+  _id?: string;
+  field: string;
+  title: string;
+  parentId: string | null;
+  order: number;
+  createdAt?: string;
+};
+
 export type Knowledge = {
   _id?: string;
   field: string;
   category: string;
   subcategory?: string;
+  folderId?: string | null;
   content: string;
   webSources: ResearchResult[];
   supportingExperiences: Experience[];

@@ -1,26 +1,35 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator,
-  Animated, PanResponder, Alert,
+  View, Text, TouchableOpacity, StyleSheet,
+  ScrollView, ActivityIndicator, Animated, PanResponder, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, font, radius } from '../constants/theme';
-import { TrashIcon, LightBulbIcon, ArrowPathIcon } from 'react-native-heroicons/outline';
-import { knowledgeApi } from '../services/api';
-import { reclassifyKnowledge } from '../services/gemini';
-import { Knowledge } from '../types';
+import {
+  TrashIcon, LightBulbIcon, ArrowPathIcon, ChevronRightIcon,
+} from 'react-native-heroicons/outline';
+import { knowledgeApi, folderApi } from '../services/api';
+import { reorganizeIntoFolders, GeminiRateLimitError } from '../services/gemini';
+import { Knowledge, KnowledgeFolder } from '../types';
 import { RootStackParamList } from '../../App';
 import { useField } from '../context/FieldContext';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
+
+type BreadcrumbEntry = { id: string | null; title: string };
 
 const STATUS_COLOR: Record<Knowledge['status'], string> = {
   verified:   colors.primary,
   hypothesis: colors.textSecondary,
   disproved:  colors.danger,
 };
+
+const INDENT_SIZE   = 16;
+const DELETE_BTN_W  = 72;
+
+// ─── ステータスサマリー ────────────────────────────────────────────────────
 
 function StatusSummary({ items }: { items: Knowledge[] }) {
   const verified  = items.filter(k => k.status === 'verified').length;
@@ -52,10 +61,9 @@ function StatusSummary({ items }: { items: Knowledge[] }) {
   );
 }
 
-const DELETE_BTN_W = 72;
+// ─── スワイプ削除の共通Hook ───────────────────────────────────────────────
 
-function KnowledgeItem({ item, onDelete }: { item: Knowledge; onDelete: (id: string) => void }) {
-  const navigation  = useNavigation<Nav>();
+function useSwipeDelete() {
   const translateX  = useRef(new Animated.Value(0)).current;
   const startX      = useRef(0);
   const revealedRef = useRef(false);
@@ -80,9 +88,150 @@ function KnowledgeItem({ item, onDelete }: { item: Knowledge; onDelete: (id: str
     })
   ).current;
 
+  function slideOut(cb: () => void) {
+    Animated.timing(translateX, { toValue: -500, duration: 180, useNativeDriver: true }).start(cb);
+  }
+
+  return { translateX, panResponder, revealedRef, slideOut };
+}
+
+// ─── ヘルパー ─────────────────────────────────────────────────────────────
+
+function countItemsRecursive(folderId: string, allFolders: KnowledgeFolder[], allKnowledge: Knowledge[]): number {
+  const direct   = allKnowledge.filter(k => k.folderId === folderId).length;
+  const children = allFolders.filter(f => f.parentId === folderId);
+  return direct + children.reduce((s, f) => s + countItemsRecursive(f._id!, allFolders, allKnowledge), 0);
+}
+
+function collectDescendantIds(folderId: string, allFolders: KnowledgeFolder[]): Set<string> {
+  const ids = new Set<string>([folderId]);
+  allFolders
+    .filter(f => f.parentId === folderId)
+    .forEach(child => collectDescendantIds(child._id!, allFolders).forEach(id => ids.add(id)));
+  return ids;
+}
+
+// ─── フォルダ行（アウトライナ形式） ──────────────────────────────────────
+//   シェブロン部分のみ → 開閉
+//   タイトル部分      → ズームイン
+
+function FolderRow({ folder, count, isExpanded, indent = 0, onToggleExpand, onZoomIn, onDelete }: {
+  folder:         KnowledgeFolder;
+  count:          number;
+  isExpanded:     boolean;
+  indent?:        number;
+  onToggleExpand: () => void;
+  onZoomIn:       () => void;
+  onDelete:       () => void;
+}) {
+  const { translateX, panResponder, slideOut } = useSwipeDelete();
+
+  const handleDelete = () => {
+    Alert.alert(
+      'ノードを削除',
+      `「${folder.title}」を削除しますか？\n中の知識はルートに移動されます。`,
+      [
+        { text: 'キャンセル', style: 'cancel' },
+        { text: '削除', style: 'destructive', onPress: () => slideOut(onDelete) },
+      ]
+    );
+  };
+
+  const indentPx = indent * INDENT_SIZE;
+
+  return (
+    <View style={styles.swipeContainer}>
+      <View style={styles.deleteAction}>
+        <TouchableOpacity onPress={handleDelete} style={styles.deleteBtn} activeOpacity={0.75}>
+          <TrashIcon size={20} color="#fff" strokeWidth={2} />
+        </TouchableOpacity>
+      </View>
+      <Animated.View
+        style={[styles.folderRow, { transform: [{ translateX }] }]}
+        {...panResponder.panHandlers}
+      >
+        {/* シェブロン：開閉のみ */}
+        <TouchableOpacity
+          onPress={onToggleExpand}
+          style={[styles.chevronBtn, { paddingLeft: 12 + indentPx }]}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <View style={{ transform: [{ rotate: isExpanded ? '90deg' : '0deg' }] }}>
+            <ChevronRightIcon size={13} color={colors.textMuted} strokeWidth={2.5} />
+          </View>
+        </TouchableOpacity>
+
+        {/* タイトル：ズームイン */}
+        <TouchableOpacity onPress={onZoomIn} style={styles.folderContent} activeOpacity={0.7}>
+          <Text style={styles.folderTitle} numberOfLines={1}>{folder.title}</Text>
+          {count > 0 && <Text style={styles.folderCount}>{count}</Text>}
+        </TouchableOpacity>
+      </Animated.View>
+    </View>
+  );
+}
+
+// ─── フォルダセクション（再帰ツリー） ────────────────────────────────────
+
+type TreeHandlers = {
+  expandedFolders:   Set<string>;
+  onToggleExpand:    (id: string) => void;
+  onZoomIn:          (folder: KnowledgeFolder) => void;
+  onDeleteFolder:    (id: string) => void;
+  onDeleteKnowledge: (id: string) => void;
+  allFolders:        KnowledgeFolder[];
+  allKnowledge:      Knowledge[];
+};
+
+function FolderSection({ folder, level = 0, handlers }: {
+  folder:   KnowledgeFolder;
+  level?:   number;
+  handlers: TreeHandlers;
+}) {
+  const { expandedFolders, onToggleExpand, onZoomIn, onDeleteFolder, onDeleteKnowledge, allFolders, allKnowledge } = handlers;
+  const isExpanded   = expandedFolders.has(folder._id!);
+  const childFolders = allFolders.filter(f => f.parentId === folder._id);
+  const childItems   = allKnowledge.filter(k => k.folderId === folder._id);
+  const count        = countItemsRecursive(folder._id!, allFolders, allKnowledge);
+
+  return (
+    <View>
+      <FolderRow
+        folder={folder}
+        count={count}
+        isExpanded={isExpanded}
+        indent={level}
+        onToggleExpand={() => onToggleExpand(folder._id!)}
+        onZoomIn={() => onZoomIn(folder)}
+        onDelete={() => onDeleteFolder(folder._id!)}
+      />
+      {isExpanded && (
+        <>
+          {childFolders.map(child => (
+            <FolderSection key={child._id} folder={child} level={level + 1} handlers={handlers} />
+          ))}
+          {childItems.map((item, i) => (
+            <KnowledgeItem key={item._id ?? i} item={item} indent={level + 1} onDelete={onDeleteKnowledge} />
+          ))}
+        </>
+      )}
+    </View>
+  );
+}
+
+// ─── 知識アイテム行 ──────────────────────────────────────────────────────
+
+function KnowledgeItem({ item, onDelete, indent = 0 }: {
+  item:    Knowledge;
+  onDelete:(id: string) => void;
+  indent?: number;
+}) {
+  const navigation = useNavigation<Nav>();
+  const { translateX, panResponder, revealedRef, slideOut } = useSwipeDelete();
+
   const handleDelete = () => {
     if (!item._id) return;
-    Animated.timing(translateX, { toValue: -500, duration: 180, useNativeDriver: true }).start(async () => {
+    slideOut(async () => {
       try { await knowledgeApi.remove(item._id!); } catch {}
       onDelete(item._id!);
     });
@@ -99,8 +248,9 @@ function KnowledgeItem({ item, onDelete }: { item: Knowledge; onDelete: (id: str
     }
   };
 
-  const pct   = Math.round(item.confidenceScore * 100);
-  const color = STATUS_COLOR[item.status];
+  const pct      = Math.round(item.confidenceScore * 100);
+  const color    = STATUS_COLOR[item.status];
+  const indentPx = indent * INDENT_SIZE;
 
   return (
     <View style={styles.swipeContainer}>
@@ -111,7 +261,7 @@ function KnowledgeItem({ item, onDelete }: { item: Knowledge; onDelete: (id: str
       </View>
       <Animated.View style={[styles.item, { transform: [{ translateX }] }]} {...panResponder.panHandlers}>
         <TouchableOpacity onPress={handlePress} activeOpacity={0.7}>
-          <View style={styles.itemRow}>
+          <View style={[styles.itemRow, { paddingLeft: 12 + indentPx }]}>
             <View style={[styles.itemDot, { backgroundColor: color }]} />
             <Text style={[styles.itemText, { color }]} numberOfLines={2}>{item.content}</Text>
             <Text style={[styles.itemPct, { color }]}>{pct}%</Text>
@@ -125,85 +275,30 @@ function KnowledgeItem({ item, onDelete }: { item: Knowledge; onDelete: (id: str
   );
 }
 
-function SubcategorySection({ subcategory, items, onDelete }: {
-  subcategory: string; items: Knowledge[]; onDelete: (id: string) => void;
-}) {
-  const [open, setOpen] = useState(true);
-  return (
-    <View style={styles.subsection}>
-      <TouchableOpacity
-        style={styles.subsectionHeader}
-        onPress={() => setOpen(v => !v)}
-        activeOpacity={0.7}
-      >
-        <Text style={styles.subsectionArrow}>{open ? '∨' : '›'}</Text>
-        <Text style={styles.subsectionTitle}>{subcategory}</Text>
-        <Text style={styles.sectionCount}>{items.length}</Text>
-      </TouchableOpacity>
-      {open && items.map((item, i) => (
-        <KnowledgeItem key={item._id ?? i} item={item} onDelete={onDelete} />
-      ))}
-    </View>
-  );
-}
-
-function CategorySection({ category, items, onDelete }: {
-  category: string; items: Knowledge[]; onDelete: (id: string) => void;
-}) {
-  const [open, setOpen] = useState(true);
-
-  const subcategories = [...new Set(
-    items.filter(k => k.subcategory).map(k => k.subcategory!)
-  )];
-  const ungrouped = items.filter(k => !k.subcategory);
-
-  return (
-    <View style={styles.section}>
-      <TouchableOpacity
-        style={styles.sectionHeader}
-        onPress={() => setOpen(v => !v)}
-        activeOpacity={0.7}
-      >
-        <Text style={styles.sectionArrow}>{open ? '∨' : '›'}</Text>
-        <Text style={styles.sectionTitle}>{category}</Text>
-        <Text style={styles.sectionCount}>{items.length}</Text>
-      </TouchableOpacity>
-      {open && (
-        <>
-          {subcategories.map(sub => (
-            <SubcategorySection
-              key={sub}
-              subcategory={sub}
-              items={items.filter(k => k.subcategory === sub)}
-              onDelete={onDelete}
-            />
-          ))}
-          {ungrouped.map((item, i) => (
-            <KnowledgeItem key={item._id ?? i} item={item} onDelete={onDelete} />
-          ))}
-        </>
-      )}
-    </View>
-  );
-}
+// ─── メイン画面 ───────────────────────────────────────────────────────────
 
 export default function KnowledgeScreen() {
-  const navigation   = useNavigation<Nav>();
+  const navigation = useNavigation<Nav>();
   const { activeField: field } = useField();
 
-  const [knowledge,   setKnowledge]   = useState<Knowledge[]>([]);
-  const [loading,     setLoading]     = useState(true);
-  const [reclassifying, setReclassifying] = useState(false);
+  const [allFolders,     setAllFolders]     = useState<KnowledgeFolder[]>([]);
+  const [allKnowledge,   setAllKnowledge]   = useState<Knowledge[]>([]);
+  const [loading,        setLoading]        = useState(true);
+  const [stack,          setStack]          = useState<BreadcrumbEntry[]>([{ id: null, title: '知識' }]);
+  const [expandedFolders,setExpandedFolders]= useState<Set<string>>(new Set());
+  const [reclassifying,  setReclassifying]  = useState(false);
 
-  const handleDelete = useCallback((id: string) => {
-    setKnowledge(prev => prev.filter(k => k._id !== id));
-  }, []);
+  const currentFolderId = stack[stack.length - 1].id;
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await knowledgeApi.list({ field });
-      setKnowledge(data);
+      const [folders, knowledge] = await Promise.all([
+        folderApi.list(field).catch(() => [] as KnowledgeFolder[]),
+        knowledgeApi.list({ field }),
+      ]);
+      setAllFolders(folders);
+      setAllKnowledge(knowledge);
     } catch (e) {
       console.error(e);
     } finally {
@@ -213,11 +308,58 @@ export default function KnowledgeScreen() {
 
   useEffect(() => { load(); }, [load]);
 
-  const handleReclassify = useCallback(async () => {
-    if (knowledge.length === 0 || reclassifying) return;
+  useEffect(() => {
+    setStack([{ id: null, title: '知識' }]);
+    setExpandedFolders(new Set());
+  }, [field]);
+
+  const visibleFolders = allFolders.filter(f =>
+    currentFolderId === null ? f.parentId == null : f.parentId === currentFolderId
+  );
+  const visibleItems = allKnowledge.filter(k =>
+    currentFolderId === null ? k.folderId == null : k.folderId === currentFolderId
+  );
+
+  const toggleFolder = useCallback((id: string) => {
+    setExpandedFolders(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }, []);
+
+  function zoomIn(folder: KnowledgeFolder) {
+    setStack(s => [...s, { id: folder._id!, title: folder.title }]);
+    setExpandedFolders(new Set());
+  }
+
+  function goToLevel(index: number) {
+    setStack(s => s.slice(0, index + 1));
+    setExpandedFolders(new Set());
+  }
+
+  async function handleDeleteFolder(id: string) {
+    try {
+      await folderApi.remove(id);
+      const deadIds = collectDescendantIds(id, allFolders);
+      setAllFolders(prev => prev.filter(f => !deadIds.has(f._id!)));
+      setAllKnowledge(prev =>
+        prev.map(k => (k.folderId && deadIds.has(k.folderId)) ? { ...k, folderId: null } : k)
+      );
+    } catch {
+      Alert.alert('エラー', '削除に失敗しました');
+    }
+  }
+
+  const handleDeleteKnowledge = useCallback((id: string) => {
+    setAllKnowledge(prev => prev.filter(k => k._id !== id));
+  }, []);
+
+  async function handleReclassify() {
+    if (allKnowledge.length === 0 || reclassifying) return;
     Alert.alert(
-      '知識を再分類',
-      `${knowledge.length}件の知識をGeminiが再グルーピングします。カテゴリ名が変更されます。よろしいですか？`,
+      'Geminiで再分類',
+      `${allKnowledge.length}件の知識をGeminiが整理します。\n必要に応じてノードを追加・細分化します。`,
       [
         { text: 'キャンセル', style: 'cancel' },
         {
@@ -225,16 +367,38 @@ export default function KnowledgeScreen() {
           onPress: async () => {
             setReclassifying(true);
             try {
-              const results = await reclassifyKnowledge(field, knowledge);
-              await Promise.all(
-                results.map(r => knowledgeApi.patch(r.id, { category: r.category, subcategory: r.subcategory }))
-              );
-              setKnowledge(prev => prev.map(k => {
-                const r = results.find(r => r.id === k._id);
-                return r ? { ...k, category: r.category, subcategory: r.subcategory } : k;
-              }));
+              const assignments = await reorganizeIntoFolders(field, allKnowledge, allFolders);
+
+              const folderIdByName = new Map(allFolders.map(f => [f.title, f._id!]));
+              const created = new Map<string, string>();
+
+              for (const { itemId, folderName } of assignments) {
+                let folderId = folderIdByName.get(folderName) ?? created.get(folderName);
+                if (!folderId) {
+                  const f = await folderApi.create({ field, title: folderName, parentId: null, order: 0 });
+                  created.set(folderName, f._id!);
+                  folderId = f._id!;
+                }
+                await knowledgeApi.patch(itemId, { folderId });
+              }
+
+              const usedIds = new Set([
+                ...assignments.map(a => folderIdByName.get(a.folderName)).filter(Boolean),
+                ...created.values(),
+              ]);
+              const emptyFolders = allFolders.filter(f => f._id && !usedIds.has(f._id));
+              await Promise.all(emptyFolders.map(f => folderApi.remove(f._id!)));
+
+              await load();
+              setStack([{ id: null, title: '知識' }]);
+              setExpandedFolders(new Set());
             } catch (e) {
-              Alert.alert('エラー', '再分類に失敗しました');
+              console.error('Reclassify error:', e);
+              if (e instanceof GeminiRateLimitError) {
+                Alert.alert('レート制限', 'Geminiのリクエスト上限に達しました。\n1〜2分待ってから再試行してください。');
+              } else {
+                Alert.alert('エラー', '再分類に失敗しました');
+              }
             } finally {
               setReclassifying(false);
             }
@@ -242,30 +406,61 @@ export default function KnowledgeScreen() {
         },
       ]
     );
-  }, [knowledge, field, reclassifying]);
+  }
 
-  const categories = [...new Set(knowledge.map(k => k.category))];
+  const treeHandlers: TreeHandlers = {
+    expandedFolders,
+    onToggleExpand:    toggleFolder,
+    onZoomIn:          zoomIn,
+    onDeleteFolder:    handleDeleteFolder,
+    onDeleteKnowledge: handleDeleteKnowledge,
+    allFolders,
+    allKnowledge,
+  };
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* パンくずナビ */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.breadcrumbScroll}
+        contentContainerStyle={styles.breadcrumbContent}
+      >
+        {stack.map((entry, i) => (
+          <React.Fragment key={i}>
+            {i > 0 && <Text style={styles.breadcrumbSep}>›</Text>}
+            <TouchableOpacity onPress={() => goToLevel(i)} activeOpacity={0.6}>
+              <Text style={[
+                styles.breadcrumbItem,
+                i === stack.length - 1 && styles.breadcrumbCurrent,
+              ]}>
+                {entry.title}
+              </Text>
+            </TouchableOpacity>
+          </React.Fragment>
+        ))}
+      </ScrollView>
+
       {loading ? (
         <ActivityIndicator style={{ marginTop: 40 }} color={colors.primary} />
       ) : (
-        <ScrollView contentContainerStyle={styles.scroll}>
-          <Text style={styles.pageTitle}>知識</Text>
-          <StatusSummary items={knowledge} />
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          keyboardShouldPersistTaps="handled"
+        >
+          {stack.length === 1 && <StatusSummary items={allKnowledge} />}
 
-          {categories.map(cat => (
-            <CategorySection
-              key={cat}
-              category={cat}
-              items={knowledge.filter(k => k.category === cat)}
-              onDelete={handleDelete}
-            />
+          {visibleFolders.map(f => (
+            <FolderSection key={f._id} folder={f} level={0} handlers={treeHandlers} />
           ))}
 
-          {knowledge.length === 0 && (
-            <Text style={styles.empty}>この分野の知識はまだありません</Text>
+          {visibleItems.map((item, i) => (
+            <KnowledgeItem key={item._id ?? i} item={item} indent={0} onDelete={handleDeleteKnowledge} />
+          ))}
+
+          {visibleFolders.length === 0 && visibleItems.length === 0 && (
+            <Text style={styles.empty}>まだ何もありません</Text>
           )}
 
           <TouchableOpacity
@@ -277,7 +472,7 @@ export default function KnowledgeScreen() {
             <Text style={styles.hypothesisBtnText}>気になることから仮説を生成</Text>
           </TouchableOpacity>
 
-          {knowledge.length > 0 && (
+          {allKnowledge.length > 0 && (
             <TouchableOpacity
               style={[styles.reclassifyBtn, reclassifying && styles.btnDisabled]}
               onPress={handleReclassify}
@@ -289,26 +484,35 @@ export default function KnowledgeScreen() {
                 : <ArrowPathIcon size={15} color={colors.textSub} strokeWidth={2} />
               }
               <Text style={styles.reclassifyBtnText}>
-                {reclassifying ? 'Geminiが再分類中…' : 'Geminiで知識を再分類'}
+                {reclassifying ? 'Geminiが再分類中…' : 'Geminiで再分類'}
               </Text>
             </TouchableOpacity>
           )}
-
         </ScrollView>
       )}
     </SafeAreaView>
   );
 }
 
+// ─── スタイル ─────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
 
-  scroll:     { paddingHorizontal: 16, paddingBottom: 32, paddingTop: 12 },
-  pageTitle:  { fontSize: font.xl, fontWeight: '700', color: colors.text, marginBottom: 16 },
+  breadcrumbScroll:  { borderBottomWidth: 1, borderBottomColor: colors.border, flexGrow: 0 },
+  breadcrumbContent: {
+    paddingHorizontal: 16, paddingVertical: 10,
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+  },
+  breadcrumbItem:    { fontSize: font.sm, color: colors.textMuted, fontWeight: '500' },
+  breadcrumbCurrent: { color: colors.text, fontWeight: '700' },
+  breadcrumbSep:     { fontSize: font.sm, color: colors.textSecondary, marginHorizontal: 2 },
+
+  scroll: { paddingHorizontal: 16, paddingBottom: 32, paddingTop: 12, gap: 4 },
 
   summaryCard: {
     backgroundColor: colors.bgCard, borderRadius: radius.md,
-    padding: 12, marginBottom: 16, gap: 8,
+    padding: 12, marginBottom: 8, gap: 8,
   },
   summaryRow:   { flexDirection: 'row', gap: 16 },
   summaryItem:  { flexDirection: 'row', alignItems: 'center', gap: 5 },
@@ -317,21 +521,7 @@ const styles = StyleSheet.create({
   summaryNum:   { fontSize: font.xs, color: colors.text, fontWeight: '600' },
   triBar:       { flexDirection: 'row', height: 3, borderRadius: 2, gap: 2, overflow: 'hidden' },
 
-  // カテゴリ（第1層）
-  section:       { marginBottom: 12 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, gap: 6 },
-  sectionArrow:  { fontSize: font.sm, color: colors.textMuted, width: 14 },
-  sectionTitle:  { flex: 1, fontSize: font.sm, fontWeight: '700', color: colors.textSub },
-  sectionCount:  { fontSize: font.xs, color: colors.textMuted },
-
-  // サブカテゴリ（第2層）
-  subsection:       { marginLeft: 14, marginBottom: 4 },
-  subsectionHeader: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, gap: 6 },
-  subsectionArrow:  { fontSize: font.xs, color: colors.textSecondary, width: 12 },
-  subsectionTitle:  { flex: 1, fontSize: font.xs, fontWeight: '600', color: colors.textMuted },
-
-  // スワイプ削除
-  swipeContainer: { marginBottom: 4, borderRadius: radius.md, overflow: 'hidden' },
+  swipeContainer: { borderRadius: radius.md, overflow: 'hidden' },
   deleteAction: {
     position: 'absolute', right: 0, top: 0, bottom: 0, width: DELETE_BTN_W,
     justifyContent: 'center', alignItems: 'center',
@@ -341,9 +531,28 @@ const styles = StyleSheet.create({
     padding: 10, justifyContent: 'center', alignItems: 'center',
   },
 
+  // フォルダ行（アウトライナ）
+  folderRow: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: colors.bgCard, borderRadius: radius.md,
+    borderWidth: 1, borderColor: colors.border,
+    minHeight: 44,
+  },
+  chevronBtn: {
+    paddingVertical: 13, paddingRight: 6,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  folderContent: {
+    flex: 1, flexDirection: 'row', alignItems: 'center',
+    paddingVertical: 13, paddingRight: 14, gap: 8,
+  },
+  folderTitle: { flex: 1, fontSize: font.sm, color: colors.textSub, fontWeight: '600' },
+  folderCount: { fontSize: font.xs, color: colors.textMuted },
+
+  // 知識アイテム行
   item: {
     backgroundColor: colors.bgCard, borderRadius: radius.md,
-    paddingTop: 10, paddingHorizontal: 12, overflow: 'hidden',
+    paddingTop: 10, paddingRight: 12, overflow: 'hidden',
   },
   itemRow:      { flexDirection: 'row', alignItems: 'center', gap: 8, paddingBottom: 8 },
   itemDot:      { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
@@ -352,10 +561,10 @@ const styles = StyleSheet.create({
   itemBarTrack: { height: 3, backgroundColor: colors.border },
   itemBarFill:  { height: 3 },
 
-  empty: { color: colors.textMuted, fontSize: font.sm, textAlign: 'center', marginTop: 40 },
+  empty: { color: colors.textMuted, fontSize: font.sm, textAlign: 'center', marginTop: 32 },
 
   hypothesisBtn: {
-    marginTop: 16, borderRadius: radius.md, backgroundColor: colors.primary,
+    marginTop: 8, borderRadius: radius.md, backgroundColor: colors.primary,
     padding: 14, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8,
   },
   hypothesisBtnText: { color: '#000', fontSize: font.sm, fontWeight: '700' },
@@ -366,6 +575,5 @@ const styles = StyleSheet.create({
     padding: 12, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6,
   },
   reclassifyBtnText: { color: colors.textSub, fontSize: font.sm },
-  btnDisabled: { opacity: 0.5 },
-
+  btnDisabled:       { opacity: 0.5 },
 });

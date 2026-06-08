@@ -71,11 +71,8 @@ export default function HypothesisScreen({ navigation, route }: Props) {
 
       const existingCategories = [...new Set(allKnowledge.map(k => k.category))];
 
-      // 仮説生成と関連知識の特定を並列実行
-      const [results, relatedIds] = await Promise.all([
-        generateHypotheses(field, trimmed, fetchedSources, youtubeUrl, existingCategories),
-        findRelatedKnowledge(trimmed, allKnowledge),
-      ]);
+      const results    = await generateHypotheses(field, trimmed, fetchedSources, youtubeUrl, existingCategories);
+      const relatedIds = await findRelatedKnowledge(trimmed, allKnowledge);
 
       setCandidates(results);
       setRelatedKnowledge(allKnowledge.filter(k => k._id && relatedIds.includes(k._id)));

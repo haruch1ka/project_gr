@@ -1,4 +1,4 @@
-import { Experience, Knowledge, Plan, Field } from '../types';
+import { Experience, Knowledge, KnowledgeFolder, Plan, Field } from '../types';
 
 const BASE_URL = 'https://project-gr-back.vercel.app';
 
@@ -34,6 +34,17 @@ export const knowledgeApi = {
     request<Knowledge>(`/knowledge/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   remove: (id: string) =>
     request<{ ok: boolean }>(`/knowledge/${id}`, { method: 'DELETE' }),
+};
+
+export const folderApi = {
+  list: (field: string) =>
+    request<KnowledgeFolder[]>(`/knowledge-folders?field=${encodeURIComponent(field)}`),
+  create: (body: Omit<KnowledgeFolder, '_id' | 'createdAt'>) =>
+    request<KnowledgeFolder>('/knowledge-folders', { method: 'POST', body: JSON.stringify(body) }),
+  patch: (id: string, body: Partial<KnowledgeFolder>) =>
+    request<KnowledgeFolder>(`/knowledge-folders/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  remove: (id: string) =>
+    request<{ ok: boolean }>(`/knowledge-folders/${id}`, { method: 'DELETE' }),
 };
 
 export const fieldApi = {

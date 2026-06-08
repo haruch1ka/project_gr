@@ -6,19 +6,36 @@ const BACK_URL = 'https://project-gr-back.vercel.app';
 
 type GeminiMessage = { role: 'user' | 'model'; parts: [{ text: string }] };
 
+export class GeminiRateLimitError extends Error {
+  constructor() { super('rate_limit'); }
+}
+
+// 429時は60秒待ってリセットを待つ。最大10回試行（＝最大約10分）
+const RATE_LIMIT_WAIT_MS = 60000;
+const MAX_RATE_LIMIT_RETRIES = 10;
+
 async function callGemini(
   messages: GeminiMessage[],
   systemInstruction?: string,
   jsonMode = false,
 ): Promise<string> {
-  const res = await fetch(`${BACK_URL}/gemini/generate`, {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify({ messages, systemInstruction, jsonMode }),
-  });
-  if (!res.ok) throw new Error(`Gemini error: ${res.status}`);
-  const data = await res.json();
-  return data.text ?? '';
+  for (let rateLimitCount = 0; ; rateLimitCount++) {
+    const res = await fetch(`${BACK_URL}/gemini/generate`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ messages, systemInstruction, jsonMode }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return data.text ?? '';
+    }
+    if (res.status === 429 && rateLimitCount < MAX_RATE_LIMIT_RETRIES) {
+      await new Promise(r => setTimeout(r, RATE_LIMIT_WAIT_MS));
+      continue;
+    }
+    if (res.status === 429) throw new GeminiRateLimitError();
+    throw new Error(`Gemini error: ${res.status}`);
+  }
 }
 
 // ─── 公開API ─────────────────────────────────────────────────────────────
@@ -181,31 +198,47 @@ JSON形式で返してください：${jsonSchema}`;
   }));
 }
 
-// ─── 知識の再分類 ─────────────────────────────────────────────────────────
+// ─── 知識のフォルダ再整理 ────────────────────────────────────────────────
 
-export type ReclassifyResult = { id: string; category: string; subcategory: string };
+export type FolderAssignment = { itemId: string; folderName: string };
 
-export async function reclassifyKnowledge(
+export async function reorganizeIntoFolders(
   field: string,
   knowledge: Knowledge[],
-): Promise<ReclassifyResult[]> {
+  existingFolders: { _id?: string; title: string }[],
+): Promise<FolderAssignment[]> {
   const items = knowledge.filter(k => k._id);
   if (items.length === 0) return [];
 
-  const list = items.map(k => `{"id":"${k._id}","content":"${k.content}"}`).join(',\n');
-  const targetCount = Math.max(2, Math.round(items.length / 3));
+  const folderNameById = new Map(existingFolders.map(f => [f._id ?? '', f.title]));
+
+  const itemList = items.map(k => {
+    const folder = k.folderId ? (folderNameById.get(k.folderId) ?? 'ルート') : 'ルート';
+    return JSON.stringify({ itemId: k._id, content: k.content, currentFolder: folder });
+  }).join(',\n');
+
+  const existingList = existingFolders.length > 0
+    ? existingFolders.map(f => JSON.stringify(f.title)).join(', ')
+    : '（なし）';
 
   const prompt = `分野：${field}
-以下の${items.length}件の知識を、意味的なまとまりで再グルーピングしてください。
-カテゴリ数の目安：${targetCount}〜${targetCount + 2}個。
-類似テーマはひとつのcategoryに統合し、必要に応じてsubcategoryで細分類してください。
+以下の知識を適切なフォルダに整理してください。
 
-知識リスト：
-[${list}]
+ルール：
+- 既存フォルダ名は積極的に再利用する（完全一致で再利用）
+- 1つのフォルダに5件以上集中する場合は細分化する
+- 関連性の低い項目が混在していれば適切なフォルダに移動する
+- 必要なら新しいフォルダを追加する（15文字以内）
 
-JSON配列で返してください：[{"id":"<id>","category":"<カテゴリ（15文字以内）>","subcategory":"<サブカテゴリ（10文字以内）、不要なら空文字>"}]`;
+既存フォルダ：${existingList}
 
-  return chatJSON<ReclassifyResult[]>(prompt);
+知識一覧：
+[${itemList}]
+
+各知識の配置先をJSON配列で返してください（itemIdは入力のitemIdをそのまま使用）：
+[{"itemId":"<itemId>","folderName":"<フォルダ名>"}]`;
+
+  return chatJSON<FolderAssignment[]>(prompt);
 }
 
 // ─── 対話 → 知識抽出 ──────────────────────────────────────────────────────
