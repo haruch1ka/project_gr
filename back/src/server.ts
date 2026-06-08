@@ -4,12 +4,13 @@ import express from 'express';
 import cors from 'cors';
 import mongoose from 'mongoose';
 
-import experienceRouter from './router/experience';
-import knowledgeRouter  from './router/knowledge';
-import planRouter       from './router/plan';
-import fieldRouter      from './router/field';
-import geminiRouter     from './router/gemini';
-import tavilyRouter     from './router/tavily';
+import experienceRouter       from './router/experience';
+import knowledgeRouter        from './router/knowledge';
+import knowledgeFolderRouter  from './router/knowledgeFolders';
+import planRouter             from './router/plan';
+import fieldRouter            from './router/field';
+import geminiRouter           from './router/gemini';
+import tavilyRouter           from './router/tavily';
 
 const app  = express();
 const PORT = process.env.PORT ?? 3000;
@@ -17,8 +18,9 @@ const PORT = process.env.PORT ?? 3000;
 app.use(cors());
 app.use(express.json());
 
-app.use('/experiences', experienceRouter);
-app.use('/knowledge',   knowledgeRouter);
+app.use('/experiences',        experienceRouter);
+app.use('/knowledge',          knowledgeRouter);
+app.use('/knowledge-folders',  knowledgeFolderRouter);
 app.use('/plans',       planRouter);
 app.use('/fields',      fieldRouter);
 app.use('/gemini',      geminiRouter);

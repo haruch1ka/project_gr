@@ -15,6 +15,7 @@ const knowledgeSchema = new Schema({
     default: 'hypothesis',
   },
   tags:      { type: [String], default: [] },
+  folderId:  { type: Schema.Types.ObjectId, ref: 'KnowledgeFolder', default: null },
   createdAt: { type: Date, default: Date.now },
 });
 
