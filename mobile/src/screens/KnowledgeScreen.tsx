@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator,
-  Animated, PanResponder,
+  Animated, PanResponder, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, font, radius } from '../constants/theme';
-import { TrashIcon, LightBulbIcon } from 'react-native-heroicons/outline';
+import { TrashIcon, LightBulbIcon, ArrowPathIcon } from 'react-native-heroicons/outline';
 import { knowledgeApi } from '../services/api';
+import { reclassifyKnowledge } from '../services/gemini';
 import { Knowledge } from '../types';
 import { RootStackParamList } from '../../App';
 import { useField } from '../context/FieldContext';
@@ -54,6 +55,7 @@ function StatusSummary({ items }: { items: Knowledge[] }) {
 const DELETE_BTN_W = 72;
 
 function KnowledgeItem({ item, onDelete }: { item: Knowledge; onDelete: (id: string) => void }) {
+  const navigation  = useNavigation<Nav>();
   const translateX  = useRef(new Animated.Value(0)).current;
   const startX      = useRef(0);
   const revealedRef = useRef(false);
@@ -86,6 +88,17 @@ function KnowledgeItem({ item, onDelete }: { item: Knowledge; onDelete: (id: str
     });
   };
 
+  const handlePress = () => {
+    if (revealedRef.current) {
+      revealedRef.current = false;
+      Animated.spring(translateX, { toValue: 0, useNativeDriver: true, bounciness: 0 }).start();
+      return;
+    }
+    if (item._id) {
+      navigation.navigate('KnowledgeItem', { field: item.field, category: item.category, id: item._id });
+    }
+  };
+
   const pct   = Math.round(item.confidenceScore * 100);
   const color = STATUS_COLOR[item.status];
 
@@ -97,14 +110,16 @@ function KnowledgeItem({ item, onDelete }: { item: Knowledge; onDelete: (id: str
         </TouchableOpacity>
       </View>
       <Animated.View style={[styles.item, { transform: [{ translateX }] }]} {...panResponder.panHandlers}>
-        <View style={styles.itemRow}>
-          <View style={[styles.itemDot, { backgroundColor: color }]} />
-          <Text style={[styles.itemText, { color }]} numberOfLines={2}>{item.content}</Text>
-          <Text style={[styles.itemPct, { color }]}>{pct}%</Text>
-        </View>
-        <View style={styles.itemBarTrack}>
-          <View style={[styles.itemBarFill, { width: `${pct}%` as any, backgroundColor: color }]} />
-        </View>
+        <TouchableOpacity onPress={handlePress} activeOpacity={0.7}>
+          <View style={styles.itemRow}>
+            <View style={[styles.itemDot, { backgroundColor: color }]} />
+            <Text style={[styles.itemText, { color }]} numberOfLines={2}>{item.content}</Text>
+            <Text style={[styles.itemPct, { color }]}>{pct}%</Text>
+          </View>
+          <View style={styles.itemBarTrack}>
+            <View style={[styles.itemBarFill, { width: `${pct}%` as any, backgroundColor: color }]} />
+          </View>
+        </TouchableOpacity>
       </Animated.View>
     </View>
   );
@@ -176,8 +191,9 @@ export default function KnowledgeScreen() {
   const navigation   = useNavigation<Nav>();
   const { activeField: field } = useField();
 
-  const [knowledge, setKnowledge] = useState<Knowledge[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [knowledge,   setKnowledge]   = useState<Knowledge[]>([]);
+  const [loading,     setLoading]     = useState(true);
+  const [reclassifying, setReclassifying] = useState(false);
 
   const handleDelete = useCallback((id: string) => {
     setKnowledge(prev => prev.filter(k => k._id !== id));
@@ -196,6 +212,37 @@ export default function KnowledgeScreen() {
   }, [field]);
 
   useEffect(() => { load(); }, [load]);
+
+  const handleReclassify = useCallback(async () => {
+    if (knowledge.length === 0 || reclassifying) return;
+    Alert.alert(
+      '知識を再分類',
+      `${knowledge.length}件の知識をGeminiが再グルーピングします。カテゴリ名が変更されます。よろしいですか？`,
+      [
+        { text: 'キャンセル', style: 'cancel' },
+        {
+          text: '再分類する',
+          onPress: async () => {
+            setReclassifying(true);
+            try {
+              const results = await reclassifyKnowledge(field, knowledge);
+              await Promise.all(
+                results.map(r => knowledgeApi.patch(r.id, { category: r.category, subcategory: r.subcategory }))
+              );
+              setKnowledge(prev => prev.map(k => {
+                const r = results.find(r => r.id === k._id);
+                return r ? { ...k, category: r.category, subcategory: r.subcategory } : k;
+              }));
+            } catch (e) {
+              Alert.alert('エラー', '再分類に失敗しました');
+            } finally {
+              setReclassifying(false);
+            }
+          },
+        },
+      ]
+    );
+  }, [knowledge, field, reclassifying]);
 
   const categories = [...new Set(knowledge.map(k => k.category))];
 
@@ -230,12 +277,23 @@ export default function KnowledgeScreen() {
             <Text style={styles.hypothesisBtnText}>気になることから仮説を生成</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.addCategoryBtn}
-            onPress={() => navigation.navigate('KnowledgeCategory', { field, category: '新しいカテゴリ' })}
-          >
-            <Text style={styles.addCategoryText}>＋ カテゴリを追加</Text>
-          </TouchableOpacity>
+          {knowledge.length > 0 && (
+            <TouchableOpacity
+              style={[styles.reclassifyBtn, reclassifying && styles.btnDisabled]}
+              onPress={handleReclassify}
+              disabled={reclassifying}
+              activeOpacity={0.8}
+            >
+              {reclassifying
+                ? <ActivityIndicator size="small" color={colors.textSub} />
+                : <ArrowPathIcon size={15} color={colors.textSub} strokeWidth={2} />
+              }
+              <Text style={styles.reclassifyBtnText}>
+                {reclassifying ? 'Geminiが再分類中…' : 'Geminiで知識を再分類'}
+              </Text>
+            </TouchableOpacity>
+          )}
+
         </ScrollView>
       )}
     </SafeAreaView>
@@ -302,10 +360,12 @@ const styles = StyleSheet.create({
   },
   hypothesisBtnText: { color: '#000', fontSize: font.sm, fontWeight: '700' },
 
-  addCategoryBtn: {
-    marginTop: 8, borderRadius: radius.md, borderWidth: 1.5,
-    borderStyle: 'dashed', borderColor: colors.border,
-    padding: 14, alignItems: 'center',
+  reclassifyBtn: {
+    marginTop: 8, borderRadius: radius.md,
+    borderWidth: 1, borderColor: colors.border,
+    padding: 12, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6,
   },
-  addCategoryText: { color: colors.textMuted, fontSize: font.sm },
+  reclassifyBtnText: { color: colors.textSub, fontSize: font.sm },
+  btnDisabled: { opacity: 0.5 },
+
 });

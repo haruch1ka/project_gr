@@ -20,7 +20,6 @@ import {
 import HomeScreen from './src/screens/HomeScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
 import KnowledgeScreen from './src/screens/KnowledgeScreen';
-import KnowledgeCategoryScreen from './src/screens/KnowledgeCategoryScreen';
 import KnowledgeItemScreen from './src/screens/KnowledgeItemScreen';
 import ChatScreen from './src/screens/ChatScreen';
 import WebScreen from './src/screens/WebScreen';
@@ -37,7 +36,6 @@ export type RootStackParamList = {
   FieldTabs:         { field?: string };
   Home:              undefined;
   Log:               { field: string };
-  KnowledgeCategory: { field: string; category: string; subcategory?: string };
   KnowledgeItem:     { field: string; category: string; id: string };
   Web:               { field: string };
   QuickLog:          { field?: string; fields?: { name: string; icon: string }[] };
@@ -173,7 +171,6 @@ export default function App() {
           <Stack.Screen name="FieldTabs" component={FieldTabNavigator} />
           <Stack.Screen name="Home"      component={HomeScreen} />
           <Stack.Screen name="Log"       component={LogScreen} />
-          <Stack.Screen name="KnowledgeCategory" component={KnowledgeCategoryScreen} />
           <Stack.Screen name="KnowledgeItem"     component={KnowledgeItemScreen} />
           <Stack.Screen name="Web"       component={WebScreen} />
           <Stack.Screen

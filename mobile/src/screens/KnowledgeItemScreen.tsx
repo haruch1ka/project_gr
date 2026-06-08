@@ -170,7 +170,7 @@ export default function KnowledgeItemScreen({ navigation, route }: Props) {
                   {src.results.slice(0, 2).map((r, j) => (
                     <View key={j} style={styles.sourceResult}>
                       <Text style={styles.sourceTitle} numberOfLines={1}>{r.title}</Text>
-                      <Text style={styles.sourceSnippet} numberOfLines={2}>{r.snippet}</Text>
+                      <Text style={styles.sourceSnippet}>{r.snippet}</Text>
                     </View>
                   ))}
                 </View>

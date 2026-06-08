@@ -181,6 +181,33 @@ JSON形式で返してください：${jsonSchema}`;
   }));
 }
 
+// ─── 知識の再分類 ─────────────────────────────────────────────────────────
+
+export type ReclassifyResult = { id: string; category: string; subcategory: string };
+
+export async function reclassifyKnowledge(
+  field: string,
+  knowledge: Knowledge[],
+): Promise<ReclassifyResult[]> {
+  const items = knowledge.filter(k => k._id);
+  if (items.length === 0) return [];
+
+  const list = items.map(k => `{"id":"${k._id}","content":"${k.content}"}`).join(',\n');
+  const targetCount = Math.max(2, Math.round(items.length / 3));
+
+  const prompt = `分野：${field}
+以下の${items.length}件の知識を、意味的なまとまりで再グルーピングしてください。
+カテゴリ数の目安：${targetCount}〜${targetCount + 2}個。
+類似テーマはひとつのcategoryに統合し、必要に応じてsubcategoryで細分類してください。
+
+知識リスト：
+[${list}]
+
+JSON配列で返してください：[{"id":"<id>","category":"<カテゴリ（15文字以内）>","subcategory":"<サブカテゴリ（10文字以内）、不要なら空文字>"}]`;
+
+  return chatJSON<ReclassifyResult[]>(prompt);
+}
+
 // ─── 対話 → 知識抽出 ──────────────────────────────────────────────────────
 
 type ExtractedKnowledge = { content: string; category: string };
