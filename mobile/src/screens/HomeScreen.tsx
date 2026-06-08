@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  ScrollView, Modal, TextInput, ActivityIndicator,
+  ScrollView, Modal, TextInput, ActivityIndicator, TouchableWithoutFeedback, Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Polyline, Circle, G } from 'react-native-svg';
@@ -252,6 +252,7 @@ export default function HomeScreen() {
       {/* 分野追加モーダル */}
 
       <Modal visible={modalVisible} transparent animationType="slide">
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <View style={styles.overlay}>
           <View style={styles.modal}>
             <Text style={styles.modalTitle}>分野を追加</Text>
@@ -289,6 +290,7 @@ export default function HomeScreen() {
             </View>
           </View>
         </View>
+        </TouchableWithoutFeedback>
       </Modal>
     </SafeAreaView>
   );

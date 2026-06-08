@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform,
+  TouchableWithoutFeedback, Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -9,20 +10,34 @@ import { RootStackParamList } from '../../App';
 import { colors, font, radius } from '../constants/theme';
 import { ArrowLeftIcon, CheckIcon } from 'react-native-heroicons/outline';
 import { searchByQuery, extractFromUrl, isYouTubeUrl, TavilyResult } from '../services/tavily';
-import { generateHypotheses, HypothesisCandidate } from '../services/gemini';
+import { generateHypotheses, findRelatedKnowledge, HypothesisCandidate } from '../services/gemini';
 import { knowledgeApi } from '../services/api';
+import { Knowledge } from '../types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Hypothesis'>;
+
+const STATUS_COLOR: Record<Knowledge['status'], string> = {
+  verified:   colors.primary,
+  hypothesis: colors.textSecondary,
+  disproved:  colors.danger,
+};
+
+const STATUS_LABEL: Record<Knowledge['status'], string> = {
+  verified:   '検証済',
+  hypothesis: '仮説',
+  disproved:  '反証',
+};
 
 export default function HypothesisScreen({ navigation, route }: Props) {
   const { field } = route.params;
 
-  const [query, setQuery]         = useState('');
-  const [loading, setLoading]     = useState(false);
-  const [candidates, setCandidates] = useState<HypothesisCandidate[]>([]);
-  const [selected, setSelected]   = useState<Set<number>>(new Set());
-  const [saving, setSaving]       = useState(false);
-  const [sources, setSources]     = useState<TavilyResult[]>([]);
+  const [query, setQuery]               = useState('');
+  const [loading, setLoading]           = useState(false);
+  const [candidates, setCandidates]     = useState<HypothesisCandidate[]>([]);
+  const [selected, setSelected]         = useState<Set<number>>(new Set());
+  const [saving, setSaving]             = useState(false);
+  const [sources, setSources]           = useState<TavilyResult[]>([]);
+  const [relatedKnowledge, setRelatedKnowledge] = useState<Knowledge[]>([]);
 
   async function generate() {
     const trimmed = query.trim();
@@ -31,22 +46,39 @@ export default function HypothesisScreen({ navigation, route }: Props) {
     setLoading(true);
     setCandidates([]);
     setSelected(new Set());
+    setRelatedKnowledge([]);
 
     try {
-      let fetchedSources: TavilyResult[] = [];
       let youtubeUrl: string | undefined;
+      let sourcesPromise: Promise<TavilyResult[]>;
 
       if (isYouTubeUrl(trimmed)) {
         youtubeUrl = trimmed;
+        sourcesPromise = Promise.resolve([]);
       } else if (trimmed.startsWith('http')) {
-        fetchedSources = await extractFromUrl(trimmed);
+        sourcesPromise = extractFromUrl(trimmed);
       } else {
-        fetchedSources = await searchByQuery(`${field} ${trimmed}`);
+        sourcesPromise = searchByQuery(`${field} ${trimmed}`);
       }
 
+      // Tavily検索と既存知識の取得を並列実行
+      const [fetchedSources, allKnowledge] = await Promise.all([
+        sourcesPromise,
+        knowledgeApi.list({ field }),
+      ]);
+
       setSources(fetchedSources);
-      const results = await generateHypotheses(field, trimmed, fetchedSources, youtubeUrl);
+
+      const existingCategories = [...new Set(allKnowledge.map(k => k.category))];
+
+      // 仮説生成と関連知識の特定を並列実行
+      const [results, relatedIds] = await Promise.all([
+        generateHypotheses(field, trimmed, fetchedSources, youtubeUrl, existingCategories),
+        findRelatedKnowledge(trimmed, allKnowledge),
+      ]);
+
       setCandidates(results);
+      setRelatedKnowledge(allKnowledge.filter(k => k._id && relatedIds.includes(k._id)));
     } catch (e: any) {
       Alert.alert('エラー', e.message ?? '生成に失敗しました');
     } finally {
@@ -72,6 +104,7 @@ export default function HypothesisScreen({ navigation, route }: Props) {
           return knowledgeApi.create({
             field,
             category:                 c.category,
+            subcategory:              c.subcategory || '',
             content:                  c.content,
             webSources:               sources.length > 0 ? [{
               field,
@@ -105,91 +138,133 @@ export default function HypothesisScreen({ navigation, route }: Props) {
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        {/* ヘッダー */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-            <ArrowLeftIcon size={22} color={colors.text} strokeWidth={2} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>仮説を生成</Text>
-          <View style={{ width: 36 }} />
-        </View>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+          <View style={{ flex: 1 }}>
+            {/* ヘッダー */}
+            <View style={styles.header}>
+              <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+                <ArrowLeftIcon size={22} color={colors.text} strokeWidth={2} />
+              </TouchableOpacity>
+              <Text style={styles.headerTitle}>仮説を生成</Text>
+              <View style={{ width: 36 }} />
+            </View>
 
-        <ScrollView
-          contentContainerStyle={styles.scroll}
-          keyboardShouldPersistTaps="handled"
-        >
-          {/* 入力 */}
-          <Text style={styles.label}>気になること・URL・YouTube</Text>
-          <View style={styles.inputRow}>
-            <TextInput
-              style={styles.input}
-              placeholder="例：朝マズメのルアー選び、https://..."
-              placeholderTextColor={colors.textMuted}
-              value={query}
-              onChangeText={setQuery}
-              multiline
-              autoFocus
-            />
-          </View>
-
-          <TouchableOpacity
-            style={[styles.generateBtn, !canGenerate && styles.btnDisabled]}
-            onPress={generate}
-            disabled={!canGenerate}
-            activeOpacity={0.8}
-          >
-            {loading
-              ? <ActivityIndicator color="#000" size="small" />
-              : <Text style={styles.generateBtnText}>Web収集 → 仮説生成</Text>
-            }
-          </TouchableOpacity>
-
-          {/* 仮説候補リスト */}
-          {candidates.length > 0 && (
-            <>
-              <Text style={styles.resultsLabel}>
-                仮説候補 — 保存するものを選択
-              </Text>
-              {candidates.map((c, i) => {
-                const isSelected = selected.has(i);
-                return (
-                  <TouchableOpacity
-                    key={i}
-                    style={[styles.candidateCard, isSelected && styles.candidateCardSelected]}
-                    onPress={() => toggleSelect(i)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.candidateRow}>
-                      <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
-                        {isSelected && <CheckIcon size={12} color="#000" strokeWidth={3} />}
-                      </View>
-                      <View style={{ flex: 1, gap: 4 }}>
-                        <Text style={[styles.candidateContent, isSelected && styles.candidateContentSelected]}>
-                          {c.content}
-                        </Text>
-                        <Text style={styles.candidateCategory}>{c.category}</Text>
-                      </View>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
+            <ScrollView
+              contentContainerStyle={styles.scroll}
+              keyboardShouldPersistTaps="handled"
+            >
+              {/* 入力 */}
+              <Text style={styles.label}>気になること・URL・YouTube</Text>
+              <View style={styles.inputRow}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="例：朝マズメのルアー選び、https://..."
+                  placeholderTextColor={colors.textMuted}
+                  value={query}
+                  onChangeText={setQuery}
+                  multiline
+                  autoFocus
+                />
+              </View>
 
               <TouchableOpacity
-                style={[styles.saveBtn, !canSave && styles.btnDisabled]}
-                onPress={saveSelected}
-                disabled={!canSave}
+                style={[styles.generateBtn, !canGenerate && styles.btnDisabled]}
+                onPress={generate}
+                disabled={!canGenerate}
                 activeOpacity={0.8}
               >
-                {saving
+                {loading
                   ? <ActivityIndicator color="#000" size="small" />
-                  : <Text style={styles.saveBtnText}>
-                      {selected.size}件を知識として保存
-                    </Text>
+                  : <Text style={styles.generateBtnText}>Web収集 → 仮説生成</Text>
                 }
               </TouchableOpacity>
-            </>
-          )}
-        </ScrollView>
+
+              {/* 関連する既存知識 */}
+              {relatedKnowledge.length > 0 && (
+                <>
+                  <View style={styles.sectionHeaderRow}>
+                    <Text style={styles.resultsLabel}>関連する既存知識</Text>
+                    <View style={styles.countBadge}>
+                      <Text style={styles.countBadgeText}>{relatedKnowledge.length}</Text>
+                    </View>
+                  </View>
+                  {relatedKnowledge.map((k, i) => {
+                    const color = STATUS_COLOR[k.status];
+                    const pct   = Math.round(k.confidenceScore * 100);
+                    return (
+                      <View key={k._id ?? i} style={styles.relatedCard}>
+                        <View style={[styles.relatedStripe, { backgroundColor: color }]} />
+                        <View style={styles.relatedBody}>
+                          <Text style={styles.relatedContent} numberOfLines={2}>{k.content}</Text>
+                          <View style={styles.relatedMeta}>
+                            <Text style={styles.relatedCategory}>{k.category}</Text>
+                            <View style={[styles.statusTag, { borderColor: color }]}>
+                              <Text style={[styles.statusTagText, { color }]}>{STATUS_LABEL[k.status]}</Text>
+                            </View>
+                            <Text style={[styles.relatedPct, { color }]}>{pct}%</Text>
+                          </View>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </>
+              )}
+
+              {/* 仮説候補リスト */}
+              {candidates.length > 0 && (
+                <>
+                  <View style={styles.sectionHeaderRow}>
+                    <Text style={styles.resultsLabel}>仮説候補 — 保存するものを選択</Text>
+                  </View>
+                  {/* 共通カテゴリヘッダー */}
+                  <View style={styles.groupCategoryRow}>
+                    <Text style={styles.groupCategoryLabel}>カテゴリ：</Text>
+                    <Text style={styles.groupCategoryName}>{candidates[0].category}</Text>
+                  </View>
+                  {candidates.map((c, i) => {
+                    const isSelected = selected.has(i);
+                    return (
+                      <TouchableOpacity
+                        key={i}
+                        style={[styles.candidateCard, isSelected && styles.candidateCardSelected]}
+                        onPress={() => toggleSelect(i)}
+                        activeOpacity={0.7}
+                      >
+                        <View style={styles.candidateRow}>
+                          <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+                            {isSelected && <CheckIcon size={12} color="#000" strokeWidth={3} />}
+                          </View>
+                          <View style={{ flex: 1, gap: 4 }}>
+                            <Text style={[styles.candidateContent, isSelected && styles.candidateContentSelected]}>
+                              {c.content}
+                            </Text>
+                            {!!c.subcategory && (
+                              <Text style={styles.candidateCategory}>{c.subcategory}</Text>
+                            )}
+                          </View>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+
+                  <TouchableOpacity
+                    style={[styles.saveBtn, !canSave && styles.btnDisabled]}
+                    onPress={saveSelected}
+                    disabled={!canSave}
+                    activeOpacity={0.8}
+                  >
+                    {saving
+                      ? <ActivityIndicator color="#000" size="small" />
+                      : <Text style={styles.saveBtnText}>
+                          {selected.size}件を知識として保存
+                        </Text>
+                    }
+                  </TouchableOpacity>
+                </>
+              )}
+            </ScrollView>
+          </View>
+        </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -226,11 +301,47 @@ const styles = StyleSheet.create({
 
   btnDisabled: { opacity: 0.4 },
 
-  resultsLabel: {
-    fontSize: font.xs, color: colors.textMuted, fontWeight: '600',
-    letterSpacing: 0.5, marginTop: 8,
+  sectionHeaderRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8,
   },
+  resultsLabel: {
+    fontSize: font.xs, color: colors.textMuted, fontWeight: '600', letterSpacing: 0.5,
+  },
+  countBadge: {
+    backgroundColor: colors.bgCard, borderRadius: 10,
+    paddingHorizontal: 7, paddingVertical: 2,
+    borderWidth: 1, borderColor: colors.border,
+  },
+  countBadgeText: { fontSize: font.xs, color: colors.textSub, fontWeight: '600' },
 
+  // 関連既存知識カード
+  relatedCard: {
+    flexDirection: 'row',
+    backgroundColor: colors.bgCard, borderRadius: radius.md,
+    borderWidth: 1, borderColor: colors.border,
+    overflow: 'hidden',
+  },
+  relatedStripe: { width: 3 },
+  relatedBody:   { flex: 1, padding: 12, gap: 6 },
+  relatedContent: { fontSize: font.sm, color: colors.textSub, lineHeight: 19 },
+  relatedMeta:   { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  relatedCategory: { fontSize: font.xs, color: colors.textMuted, flex: 1 },
+  statusTag: {
+    borderWidth: 1, borderRadius: 4,
+    paddingHorizontal: 6, paddingVertical: 1,
+  },
+  statusTagText: { fontSize: font.xs, fontWeight: '600' },
+  relatedPct:    { fontSize: font.xs, fontWeight: '700' },
+
+  // 仮説候補グループヘッダー
+  groupCategoryRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 2,
+  },
+  groupCategoryLabel: { fontSize: font.xs, color: colors.textMuted, fontWeight: '600' },
+  groupCategoryName:  { fontSize: font.xs, color: colors.textSub, fontWeight: '700' },
+
+  // 仮説候補カード
   candidateCard: {
     backgroundColor: colors.bgCard, borderRadius: radius.md,
     borderWidth: 1.5, borderColor: colors.border,

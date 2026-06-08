@@ -110,10 +110,38 @@ function KnowledgeItem({ item, onDelete }: { item: Knowledge; onDelete: (id: str
   );
 }
 
-function CategorySection({ category, items, onDelete, onNavigate }: {
-  category: string; items: Knowledge[]; onDelete: (id: string) => void; onNavigate: () => void;
+function SubcategorySection({ subcategory, items, onDelete }: {
+  subcategory: string; items: Knowledge[]; onDelete: (id: string) => void;
 }) {
   const [open, setOpen] = useState(true);
+  return (
+    <View style={styles.subsection}>
+      <TouchableOpacity
+        style={styles.subsectionHeader}
+        onPress={() => setOpen(v => !v)}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.subsectionArrow}>{open ? '∨' : '›'}</Text>
+        <Text style={styles.subsectionTitle}>{subcategory}</Text>
+        <Text style={styles.sectionCount}>{items.length}</Text>
+      </TouchableOpacity>
+      {open && items.map((item, i) => (
+        <KnowledgeItem key={item._id ?? i} item={item} onDelete={onDelete} />
+      ))}
+    </View>
+  );
+}
+
+function CategorySection({ category, items, onDelete }: {
+  category: string; items: Knowledge[]; onDelete: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(true);
+
+  const subcategories = [...new Set(
+    items.filter(k => k.subcategory).map(k => k.subcategory!)
+  )];
+  const ungrouped = items.filter(k => !k.subcategory);
+
   return (
     <View style={styles.section}>
       <TouchableOpacity
@@ -125,9 +153,21 @@ function CategorySection({ category, items, onDelete, onNavigate }: {
         <Text style={styles.sectionTitle}>{category}</Text>
         <Text style={styles.sectionCount}>{items.length}</Text>
       </TouchableOpacity>
-      {open && items.map((item, i) => (
-        <KnowledgeItem key={item._id ?? i} item={item} onDelete={onDelete} />
-      ))}
+      {open && (
+        <>
+          {subcategories.map(sub => (
+            <SubcategorySection
+              key={sub}
+              subcategory={sub}
+              items={items.filter(k => k.subcategory === sub)}
+              onDelete={onDelete}
+            />
+          ))}
+          {ungrouped.map((item, i) => (
+            <KnowledgeItem key={item._id ?? i} item={item} onDelete={onDelete} />
+          ))}
+        </>
+      )}
     </View>
   );
 }
@@ -143,7 +183,7 @@ export default function KnowledgeScreen() {
     setKnowledge(prev => prev.filter(k => k._id !== id));
   }, []);
 
-  const fetch = useCallback(async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       const data = await knowledgeApi.list({ field });
@@ -155,7 +195,7 @@ export default function KnowledgeScreen() {
     }
   }, [field]);
 
-  useEffect(() => { fetch(); }, [fetch]);
+  useEffect(() => { load(); }, [load]);
 
   const categories = [...new Set(knowledge.map(k => k.category))];
 
@@ -174,7 +214,6 @@ export default function KnowledgeScreen() {
               category={cat}
               items={knowledge.filter(k => k.category === cat)}
               onDelete={handleDelete}
-              onNavigate={() => navigation.navigate('KnowledgeCategory', { field, category: cat })}
             />
           ))}
 
@@ -220,24 +259,28 @@ const styles = StyleSheet.create({
   summaryNum:   { fontSize: font.xs, color: colors.text, fontWeight: '600' },
   triBar:       { flexDirection: 'row', height: 3, borderRadius: 2, gap: 2, overflow: 'hidden' },
 
+  // カテゴリ（第1層）
   section:       { marginBottom: 12 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, gap: 6 },
   sectionArrow:  { fontSize: font.sm, color: colors.textMuted, width: 14 },
   sectionTitle:  { flex: 1, fontSize: font.sm, fontWeight: '700', color: colors.textSub },
   sectionCount:  { fontSize: font.xs, color: colors.textMuted },
 
-  swipeContainer: {
-    marginBottom: 4, borderRadius: radius.md, overflow: 'hidden',
-  },
+  // サブカテゴリ（第2層）
+  subsection:       { marginLeft: 14, marginBottom: 4 },
+  subsectionHeader: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, gap: 6 },
+  subsectionArrow:  { fontSize: font.xs, color: colors.textSecondary, width: 12 },
+  subsectionTitle:  { flex: 1, fontSize: font.xs, fontWeight: '600', color: colors.textMuted },
+
+  // スワイプ削除
+  swipeContainer: { marginBottom: 4, borderRadius: radius.md, overflow: 'hidden' },
   deleteAction: {
     position: 'absolute', right: 0, top: 0, bottom: 0, width: DELETE_BTN_W,
     justifyContent: 'center', alignItems: 'center',
   },
   deleteBtn: {
-    backgroundColor: colors.danger,
-    borderRadius: radius.md,
-    padding: 10,
-    justifyContent: 'center', alignItems: 'center',
+    backgroundColor: colors.danger, borderRadius: radius.md,
+    padding: 10, justifyContent: 'center', alignItems: 'center',
   },
 
   item: {
@@ -253,16 +296,9 @@ const styles = StyleSheet.create({
 
   empty: { color: colors.textMuted, fontSize: font.sm, textAlign: 'center', marginTop: 40 },
 
-  emptyCenter: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  emptyIcon:   { fontSize: 48 },
-  emptyText:   { fontSize: font.md, color: colors.textMuted, fontWeight: '500' },
-  emptySub:    { fontSize: font.sm, color: colors.textSecondary },
-
   hypothesisBtn: {
-    marginTop: 16, borderRadius: radius.md,
-    backgroundColor: colors.primary,
-    padding: 14, alignItems: 'center',
-    flexDirection: 'row', justifyContent: 'center', gap: 8,
+    marginTop: 16, borderRadius: radius.md, backgroundColor: colors.primary,
+    padding: 14, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8,
   },
   hypothesisBtnText: { color: '#000', fontSize: font.sm, fontWeight: '700' },
 

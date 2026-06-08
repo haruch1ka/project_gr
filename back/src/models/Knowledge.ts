@@ -1,9 +1,10 @@
 import { Schema, model } from 'mongoose';
 
 const knowledgeSchema = new Schema({
-  field:    { type: String, required: true },
-  category: { type: String, required: true },
-  content:  { type: String, required: true },
+  field:       { type: String, required: true },
+  category:    { type: String, required: true },
+  subcategory: { type: String, default: '' },
+  content:     { type: String, required: true },
   webSources:               { type: Array, default: [] },
   supportingExperiences:    { type: Array, default: [] },
   contradictingExperiences: { type: Array, default: [] },

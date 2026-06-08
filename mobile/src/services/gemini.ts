@@ -108,36 +108,77 @@ export async function updateKnowledgeFromExperience(
   }
 }
 
+// ─── クエリ関連知識の特定 ──────────────────────────────────────────────────
+
+export async function findRelatedKnowledge(
+  query: string,
+  knowledgeItems: Knowledge[],
+): Promise<string[]> {
+  const items = knowledgeItems.filter(k => k._id);
+  if (items.length === 0) return [];
+
+  const list = items.map(k => `{"id":"${k._id}","content":"${k.content}"}`).join(',\n');
+  const prompt = `クエリ：「${query}」
+以下の知識リストから、クエリと関連する知識のIDを最大5件選んでください（関連がなければ空配列）。
+[${list}]
+JSON配列で返してください：["id1","id2",...]`;
+
+  try {
+    return await chatJSON<string[]>(prompt);
+  } catch {
+    return [];
+  }
+}
+
 // ─── 仮説候補生成 ─────────────────────────────────────────────────────────
 
 export type HypothesisCandidate = {
-  content:  string;
-  category: string;
+  content:     string;
+  category:    string;
+  subcategory: string;
 };
 
 export async function generateHypotheses(
-  field:       string,
-  query:       string,
-  sources:     TavilyResult[],
-  youtubeUrl?: string,
+  field:              string,
+  query:              string,
+  sources:            TavilyResult[],
+  youtubeUrl?:        string,
+  existingCategories: string[] = [],
 ): Promise<HypothesisCandidate[]> {
+  const jsonSchema = `{"groupCategory":"<全仮説をまとめる共通カテゴリ（15文字以内）>","hypotheses":[{"content":"<仮説>","subcategory":"<細分類（10文字以内）、不要なら空文字>"}]}`;
+
+  const categoryHint = existingCategories.length > 0
+    ? `\n既存カテゴリ一覧：[${existingCategories.map(c => `"${c}"`).join(', ')}]\n類似するカテゴリがあれば既存のものをそのまま使い、なければ新たに命名してください。\n`
+    : '';
+
   const prompt = youtubeUrl
     ? `分野：${field}
 気になっていること：「${query}」
 YouTube動画URL：${youtubeUrl}
-
+${categoryHint}
 上記の動画を踏まえ、この分野で実践・検証できる仮説を3〜5件生成してください。
-JSON配列で返してください：[{"content":"<仮説>","category":"<カテゴリ（10文字以内）>"}]`
+また、これら仮説全体をまとめる共通カテゴリ名も返してください。
+JSON形式で返してください：${jsonSchema}`
     : `分野：${field}
 気になっていること：「${query}」
-
+${categoryHint}
 以下のWeb情報を参考に、実践・検証できる仮説を3〜5件生成してください。
+また、これら仮説全体をまとめる共通カテゴリ名も返してください。
 
 ${sources.map((s, i) => `[${i + 1}] ${s.title}\n${s.snippet}`).join('\n\n')}
 
-JSON配列で返してください：[{"content":"<仮説>","category":"<カテゴリ（10文字以内）>"}]`;
+JSON形式で返してください：${jsonSchema}`;
 
-  return chatJSON<HypothesisCandidate[]>(prompt);
+  type RawResponse = {
+    groupCategory: string;
+    hypotheses: Array<{ content: string; subcategory: string }>;
+  };
+  const raw = await chatJSON<RawResponse>(prompt);
+  return raw.hypotheses.map(h => ({
+    content:     h.content,
+    category:    raw.groupCategory,
+    subcategory: h.subcategory,
+  }));
 }
 
 // ─── 対話 → 知識抽出 ──────────────────────────────────────────────────────

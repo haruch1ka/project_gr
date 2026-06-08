@@ -25,6 +25,7 @@ export type Knowledge = {
   _id?: string;
   field: string;
   category: string;
+  subcategory?: string;
   content: string;
   webSources: ResearchResult[];
   supportingExperiences: Experience[];

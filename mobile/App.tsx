@@ -37,8 +37,8 @@ export type RootStackParamList = {
   FieldTabs:         { field?: string };
   Home:              undefined;
   Log:               { field: string };
-  KnowledgeCategory: { field: string; category: string };
-  KnowledgeItem:     { field: string; category: string; item: string };
+  KnowledgeCategory: { field: string; category: string; subcategory?: string };
+  KnowledgeItem:     { field: string; category: string; id: string };
   Web:               { field: string };
   QuickLog:          { field?: string; fields?: { name: string; icon: string }[] };
   Settings:          undefined;

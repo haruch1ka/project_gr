@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   View, Text, TouchableOpacity, StyleSheet, FlatList,
-  Modal, TextInput, ActivityIndicator,
+  Modal, TextInput, ActivityIndicator, TouchableWithoutFeedback, Keyboard,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -105,6 +105,7 @@ export default function PlanScreen() {
       )}
 
       <Modal visible={modalVisible} transparent animationType="slide">
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <View style={styles.overlay}>
           <View style={styles.modal}>
             <Text style={styles.modalTitle}>プランを追加</Text>
@@ -130,6 +131,7 @@ export default function PlanScreen() {
             </View>
           </View>
         </View>
+        </TouchableWithoutFeedback>
       </Modal>
     </SafeAreaView>
   );

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  FlatList, Modal, TextInput, ActivityIndicator,
+  FlatList, Modal, TextInput, ActivityIndicator, TouchableWithoutFeedback, Keyboard,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
@@ -81,7 +81,7 @@ export default function KnowledgeCategoryScreen({ navigation, route }: Props) {
             ) : (
               <TouchableOpacity
                 style={styles.linkItem}
-                onPress={() => navigation.navigate('KnowledgeItem', { field, category, item: item.content })}
+                onPress={() => navigation.navigate('KnowledgeItem', { field, category, id: item._id! })}
                 activeOpacity={0.6}
               >
                 <Text style={styles.linkText}>{item.content}</Text>
@@ -92,6 +92,7 @@ export default function KnowledgeCategoryScreen({ navigation, route }: Props) {
       )}
 
       <Modal visible={modalVisible} transparent animationType="slide">
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <View style={styles.overlay}>
           <View style={styles.modal}>
             <Text style={styles.modalTitle}>知識を追加</Text>
@@ -117,6 +118,7 @@ export default function KnowledgeCategoryScreen({ navigation, route }: Props) {
             </View>
           </View>
         </View>
+        </TouchableWithoutFeedback>
       </Modal>
     </SafeAreaView>
   );

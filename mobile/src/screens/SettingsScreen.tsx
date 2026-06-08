@@ -1,18 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  ScrollView, TextInput, Alert, Modal,
+  ScrollView, TextInput, Alert, Modal, TouchableWithoutFeedback, Keyboard,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import {
   ChevronLeftIcon, PlusIcon, TrashIcon,
-  CheckCircleIcon, EyeIcon, EyeSlashIcon,
 } from 'react-native-heroicons/outline';
 import { useField } from '../context/FieldContext';
 import { colors, font, radius } from '../constants/theme';
-import { saveTavilyKey, getTavilyKey, clearTavilyKey } from '../services/tavily';
-
 const ICON_OPTIONS = ['🎣', '💪', '📖', '🎸', '🏊', '🧘', '🍳', '✏️', '🎾', '⚽', '🎨', '🎮'];
 
 export default function SettingsScreen() {
@@ -21,44 +18,6 @@ export default function SettingsScreen() {
   const [modalVisible,  setModalVisible]  = useState(false);
   const [newName,       setNewName]       = useState('');
   const [selectedIcon,  setSelectedIcon]  = useState(ICON_OPTIONS[0]);
-
-  // Tavily APIキー
-  const [tavilyInput,   setTavilyInput]   = useState('');
-  const [tavilyStored,  setTavilyStored]  = useState(false);
-  const [showTavily,    setShowTavily]    = useState(false);
-  const [tavilySaving,  setTavilySaving]  = useState(false);
-
-  useEffect(() => {
-    getTavilyKey().then(k => setTavilyStored(!!k));
-  }, []);
-
-  async function handleSaveTavilyKey() {
-    const trimmed = tavilyInput.trim();
-    if (!trimmed) return;
-    setTavilySaving(true);
-    try {
-      await saveTavilyKey(trimmed);
-      setTavilyStored(true);
-      setTavilyInput('');
-      Alert.alert('保存しました', 'Tavily APIキーを保存しました。');
-    } finally {
-      setTavilySaving(false);
-    }
-  }
-
-  async function handleClearTavilyKey() {
-    Alert.alert('削除確認', 'Tavily APIキーを削除しますか？', [
-      { text: 'キャンセル', style: 'cancel' },
-      {
-        text: '削除', style: 'destructive',
-        onPress: async () => {
-          await clearTavilyKey();
-          setTavilyStored(false);
-          setTavilyInput('');
-        },
-      },
-    ]);
-  }
 
   const openModal = () => {
     setNewName('');
@@ -100,49 +59,6 @@ export default function SettingsScreen() {
 
       <ScrollView contentContainerStyle={styles.scroll}>
 
-        {/* Tavily APIキー */}
-        <Text style={styles.sectionLabel}>Tavily APIキー（Web検索）</Text>
-        <View style={styles.card}>
-          {tavilyStored ? (
-            <View style={styles.keyRow}>
-              <CheckCircleIcon size={18} color={colors.primary} strokeWidth={2} />
-              <Text style={styles.keySetText}>設定済み</Text>
-              <TouchableOpacity onPress={handleClearTavilyKey} style={styles.keyAction} activeOpacity={0.7}>
-                <Text style={styles.keyActionText}>削除</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View style={styles.keyInputWrap}>
-              <View style={styles.keyInputRow}>
-                <TextInput
-                  style={styles.keyInput}
-                  value={tavilyInput}
-                  onChangeText={setTavilyInput}
-                  placeholder="tvly-..."
-                  placeholderTextColor={colors.textMuted}
-                  secureTextEntry={!showTavily}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-                <TouchableOpacity onPress={() => setShowTavily(v => !v)} style={styles.eyeBtn} activeOpacity={0.7}>
-                  {showTavily
-                    ? <EyeSlashIcon size={18} color={colors.textMuted} strokeWidth={2} />
-                    : <EyeIcon      size={18} color={colors.textMuted} strokeWidth={2} />
-                  }
-                </TouchableOpacity>
-              </View>
-              <TouchableOpacity
-                style={[styles.keySaveBtn, (!tavilyInput.trim() || tavilySaving) && styles.keySaveBtnDisabled]}
-                onPress={handleSaveTavilyKey}
-                disabled={!tavilyInput.trim() || tavilySaving}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.keySaveBtnText}>保存</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-
         <Text style={styles.sectionLabel}>分野の管理</Text>
         <View style={styles.card}>
           {fields.map((f, i) => (
@@ -182,6 +98,7 @@ export default function SettingsScreen() {
       </ScrollView>
 
       <Modal visible={modalVisible} transparent animationType="slide">
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <View style={styles.overlay}>
           <View style={styles.sheet}>
             <Text style={styles.sheetTitle}>分野を追加</Text>
@@ -229,6 +146,7 @@ export default function SettingsScreen() {
             </View>
           </View>
         </View>
+        </TouchableWithoutFeedback>
       </Modal>
     </SafeAreaView>
   );
@@ -249,19 +167,6 @@ const styles = StyleSheet.create({
   sectionLabel: { fontSize: font.xs, color: colors.textMuted, fontWeight: '600', letterSpacing: 0.5, marginTop: 8 },
 
   card: { backgroundColor: colors.bgCard, borderRadius: radius.md, overflow: 'hidden', marginTop: 6 },
-
-  // APIキー
-  keyRow:      { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 14 },
-  keySetText:  { flex: 1, fontSize: font.sm, color: colors.text, fontWeight: '500' },
-  keyAction:   { paddingHorizontal: 10, paddingVertical: 4 },
-  keyActionText:{ fontSize: font.sm, color: colors.danger, fontWeight: '600' },
-  keyInputWrap:{ padding: 14, gap: 10 },
-  keyInputRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: colors.borderInput, borderRadius: radius.sm, backgroundColor: colors.bg, paddingHorizontal: 12 },
-  keyInput:    { flex: 1, fontSize: font.sm, color: colors.text, paddingVertical: 11 },
-  eyeBtn:      { padding: 4 },
-  keySaveBtn:  { backgroundColor: colors.primary, borderRadius: radius.sm, paddingVertical: 11, alignItems: 'center' },
-  keySaveBtnDisabled: { opacity: 0.4 },
-  keySaveBtnText:{ fontSize: font.sm, color: '#000', fontWeight: '700' },
 
   fieldRow:   { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 13, gap: 10 },
   fieldBorder:{ borderBottomWidth: 1, borderBottomColor: colors.border },

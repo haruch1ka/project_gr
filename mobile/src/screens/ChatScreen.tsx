@@ -177,6 +177,7 @@ export default function ChatScreen() {
           data={messages}
           keyExtractor={(_, i) => String(i)}
           contentContainerStyle={styles.messageList}
+          keyboardDismissMode="on-drag"
           onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
           renderItem={({ item }) => (
             <View style={[styles.bubble, item.role === 'user' ? styles.bubbleUser : styles.bubbleBot]}>
