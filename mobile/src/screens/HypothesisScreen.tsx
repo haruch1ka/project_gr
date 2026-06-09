@@ -301,9 +301,7 @@ export default function HypothesisScreen({ navigation, route }: Props) {
               )}
             </>
           )}
-            </ScrollView>
-          </View>
-        </TouchableWithoutFeedback>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

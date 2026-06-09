@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
   ScrollView, ActivityIndicator, Animated, PanResponder, Alert,
@@ -25,6 +25,12 @@ const STATUS_COLOR: Record<Knowledge['status'], string> = {
   hypothesis: colors.textSecondary,
   disproved:  colors.danger,
 };
+
+const STATUS_CHIPS: Array<{ value: Knowledge['status']; label: string; color: string }> = [
+  { value: 'verified',   label: '検証済', color: colors.primary },
+  { value: 'hypothesis', label: '仮説',   color: colors.amber },
+  { value: 'disproved',  label: '反証',   color: colors.danger },
+];
 
 const INDENT_SIZE   = 16;
 const DELETE_BTN_W  = 72;
@@ -58,6 +64,90 @@ function StatusSummary({ items }: { items: Knowledge[] }) {
         {total === 0 && <View style={{ flex: 1, backgroundColor: colors.border }} />}
       </View>
     </View>
+  );
+}
+
+// ─── ファセットバー ────────────────────────────────────────────────────────
+
+type FacetBarProps = {
+  filterStatus:     Set<Knowledge['status']>;
+  filterCategories: Set<string>;
+  filterTags:       Set<string>;
+  categories:       string[];
+  tags:             string[];
+  onToggleStatus:   (s: Knowledge['status']) => void;
+  onToggleCategory: (c: string) => void;
+  onToggleTag:      (t: string) => void;
+};
+
+function ActiveChip({ label, color, onPress }: { label: string; color: string; onPress: () => void }) {
+  return (
+    <TouchableOpacity
+      style={[styles.chipOn, { backgroundColor: color }]}
+      onPress={onPress}
+      activeOpacity={0.75}
+    >
+      <Text style={styles.chipOnText}>{label}</Text>
+      <View style={styles.chipClose}>
+        <Text style={styles.chipCloseX}>×</Text>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+function InactiveChip({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <TouchableOpacity style={styles.chip} onPress={onPress} activeOpacity={0.7}>
+      <Text style={styles.chipText}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
+function FacetBar({
+  filterStatus, filterCategories, filterTags,
+  categories, tags,
+  onToggleStatus, onToggleCategory, onToggleTag,
+}: FacetBarProps) {
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={styles.facetBar}
+      contentContainerStyle={styles.facetBarContent}
+    >
+      {STATUS_CHIPS.map(({ value, label, color }) =>
+        filterStatus.has(value)
+          ? <ActiveChip   key={value} label={label} color={color}       onPress={() => onToggleStatus(value)} />
+          : <InactiveChip key={value} label={label}                     onPress={() => onToggleStatus(value)} />
+      )}
+
+      {categories.length > 0 && (
+        <>
+          <View style={styles.chipDivider} />
+          {categories.map(cat =>
+            filterCategories.has(cat)
+              ? <ActiveChip   key={cat} label={cat} color={colors.blue} onPress={() => onToggleCategory(cat)} />
+              : <InactiveChip key={cat} label={cat}                     onPress={() => onToggleCategory(cat)} />
+          )}
+        </>
+      )}
+
+      {tags.length > 0 && (
+        <>
+          <View style={styles.chipDivider} />
+          {tags.map(tag =>
+            filterTags.has(tag)
+              ? <ActiveChip   key={tag} label={`#${tag}`} color={colors.blue} onPress={() => onToggleTag(tag)} />
+              : <InactiveChip key={tag} label={`#${tag}`}                     onPress={() => onToggleTag(tag)} />
+          )}
+        </>
+      )}
+
+      <View style={styles.chipAdd}>
+        <Text style={styles.chipAddPlus}>＋</Text>
+        <Text style={styles.chipAddText}>フィルター</Text>
+      </View>
+    </ScrollView>
   );
 }
 
@@ -288,6 +378,30 @@ export default function KnowledgeScreen() {
   const [expandedFolders,setExpandedFolders]= useState<Set<string>>(new Set());
   const [reclassifying,  setReclassifying]  = useState(false);
 
+  const [filterStatus,     setFilterStatus]     = useState<Set<Knowledge['status']>>(new Set());
+  const [filterCategories, setFilterCategories] = useState<Set<string>>(new Set());
+  const [filterTags,       setFilterTags]       = useState<Set<string>>(new Set());
+
+  const facetActive = filterStatus.size > 0 || filterCategories.size > 0 || filterTags.size > 0;
+
+  const uniqueCategories = useMemo(
+    () => [...new Set(allKnowledge.map(k => k.category).filter(Boolean))].sort(),
+    [allKnowledge],
+  );
+  const uniqueTags = useMemo(
+    () => [...new Set(allKnowledge.flatMap(k => k.tags ?? []))].sort(),
+    [allKnowledge],
+  );
+  const filteredKnowledge = useMemo(() => {
+    if (!facetActive) return allKnowledge;
+    return allKnowledge.filter(k => {
+      if (filterStatus.size > 0     && !filterStatus.has(k.status))                  return false;
+      if (filterCategories.size > 0 && !filterCategories.has(k.category))            return false;
+      if (filterTags.size > 0       && !(k.tags ?? []).some(t => filterTags.has(t))) return false;
+      return true;
+    });
+  }, [allKnowledge, filterStatus, filterCategories, filterTags, facetActive]);
+
   const currentFolderId = stack[stack.length - 1].id;
 
   const load = useCallback(async () => {
@@ -311,6 +425,9 @@ export default function KnowledgeScreen() {
   useEffect(() => {
     setStack([{ id: null, title: '知識' }]);
     setExpandedFolders(new Set());
+    setFilterStatus(new Set());
+    setFilterCategories(new Set());
+    setFilterTags(new Set());
   }, [field]);
 
   const visibleFolders = allFolders.filter(f =>
@@ -354,6 +471,16 @@ export default function KnowledgeScreen() {
   const handleDeleteKnowledge = useCallback((id: string) => {
     setAllKnowledge(prev => prev.filter(k => k._id !== id));
   }, []);
+
+  function toggleStatus(s: Knowledge['status']) {
+    setFilterStatus(prev => { const n = new Set(prev); n.has(s) ? n.delete(s) : n.add(s); return n; });
+  }
+  function toggleCategory(c: string) {
+    setFilterCategories(prev => { const n = new Set(prev); n.has(c) ? n.delete(c) : n.add(c); return n; });
+  }
+  function toggleTag(t: string) {
+    setFilterTags(prev => { const n = new Set(prev); n.has(t) ? n.delete(t) : n.add(t); return n; });
+  }
 
   async function handleReclassify() {
     if (allKnowledge.length === 0 || reclassifying) return;
@@ -442,6 +569,17 @@ export default function KnowledgeScreen() {
         ))}
       </ScrollView>
 
+      <FacetBar
+        filterStatus={filterStatus}
+        filterCategories={filterCategories}
+        filterTags={filterTags}
+        categories={uniqueCategories}
+        tags={uniqueTags}
+        onToggleStatus={toggleStatus}
+        onToggleCategory={toggleCategory}
+        onToggleTag={toggleTag}
+      />
+
       {loading ? (
         <ActivityIndicator style={{ marginTop: 40 }} color={colors.primary} />
       ) : (
@@ -451,16 +589,28 @@ export default function KnowledgeScreen() {
         >
           {stack.length === 1 && <StatusSummary items={allKnowledge} />}
 
-          {visibleFolders.map(f => (
-            <FolderSection key={f._id} folder={f} level={0} handlers={treeHandlers} />
-          ))}
-
-          {visibleItems.map((item, i) => (
-            <KnowledgeItem key={item._id ?? i} item={item} indent={0} onDelete={handleDeleteKnowledge} />
-          ))}
-
-          {visibleFolders.length === 0 && visibleItems.length === 0 && (
-            <Text style={styles.empty}>まだ何もありません</Text>
+          {facetActive ? (
+            <>
+              <Text style={styles.filterCount}>{filteredKnowledge.length}件</Text>
+              {filteredKnowledge.map((item, i) => (
+                <KnowledgeItem key={item._id ?? i} item={item} indent={0} onDelete={handleDeleteKnowledge} />
+              ))}
+              {filteredKnowledge.length === 0 && (
+                <Text style={styles.empty}>条件に合う知識がありません</Text>
+              )}
+            </>
+          ) : (
+            <>
+              {visibleFolders.map(f => (
+                <FolderSection key={f._id} folder={f} level={0} handlers={treeHandlers} />
+              ))}
+              {visibleItems.map((item, i) => (
+                <KnowledgeItem key={item._id ?? i} item={item} indent={0} onDelete={handleDeleteKnowledge} />
+              ))}
+              {visibleFolders.length === 0 && visibleItems.length === 0 && (
+                <Text style={styles.empty}>まだ何もありません</Text>
+              )}
+            </>
           )}
 
           <TouchableOpacity
@@ -576,4 +726,22 @@ const styles = StyleSheet.create({
   },
   reclassifyBtnText: { color: colors.textSub, fontSize: font.sm },
   btnDisabled:       { opacity: 0.5 },
+
+  facetBar:        { borderBottomWidth: 1, borderBottomColor: colors.border, flexGrow: 0 },
+  facetBarContent: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 6, flexDirection: 'row', gap: 8, alignItems: 'center' },
+
+  chip:     { height: 32, paddingHorizontal: 14, borderRadius: 16, borderWidth: 1, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' },
+  chipText: { fontSize: font.xs, fontWeight: '500', color: colors.textSub },
+
+  chipOn:     { height: 32, paddingLeft: 12, paddingRight: 10, borderRadius: 16, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  chipOnText: { fontSize: font.xs, fontWeight: '600', color: '#0e1014' },
+  chipClose:  { width: 16, height: 16, borderRadius: 8, backgroundColor: 'rgba(14,16,20,0.22)', justifyContent: 'center', alignItems: 'center' },
+  chipCloseX: { fontSize: 10, color: '#0e1014', lineHeight: 16, textAlign: 'center' },
+
+  chipAdd:     { height: 32, paddingHorizontal: 13, borderRadius: 16, borderWidth: 1, borderStyle: 'dashed', borderColor: colors.blue, flexDirection: 'row', alignItems: 'center', gap: 4 },
+  chipAddPlus: { fontSize: 14, color: colors.blue, lineHeight: 16 },
+  chipAddText: { fontSize: font.xs, fontWeight: '500', color: colors.blue },
+
+  chipDivider:  { width: 1, height: 14, backgroundColor: colors.border, marginHorizontal: 2 },
+  filterCount:  { fontSize: font.xs, color: colors.textMuted, textAlign: 'right', marginBottom: 4 },
 });

@@ -14,7 +14,7 @@ import {
   HomeIcon as HomeIconSolid,
   BookOpenIcon as BookOpenIconSolid,
   ChatBubbleOvalLeftIcon as ChatIconSolid,
-  ClipboardDocumentListIcon as PlanIconSolid,
+  ClipboardDocumentListIcon as LogIconSolid,
 } from 'react-native-heroicons/solid';
 
 import HomeScreen from './src/screens/HomeScreen';
@@ -23,7 +23,7 @@ import KnowledgeScreen from './src/screens/KnowledgeScreen';
 import KnowledgeItemScreen from './src/screens/KnowledgeItemScreen';
 import ChatScreen from './src/screens/ChatScreen';
 import WebScreen from './src/screens/WebScreen';
-import PlanScreen from './src/screens/PlanScreen';
+import ExperienceScreen from './src/screens/ExperienceScreen';
 import LogScreen from './src/screens/LogScreen';
 import QuickLogScreen from './src/screens/QuickLogScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
@@ -44,11 +44,11 @@ export type RootStackParamList = {
 };
 
 export type FieldTabParamList = {
-  Dashboard: undefined;
-  Knowledge: undefined;
-  _FieldLog: undefined;
-  Chat:      undefined;
-  Plan:      undefined;
+  Dashboard:  undefined;
+  Knowledge:  undefined;
+  _FieldLog:  undefined;
+  Chat:       undefined;
+  Experience: undefined;
 };
 
 // ─── ナビゲーターインスタンス ─────────────────────────────────────────────
@@ -59,10 +59,10 @@ const FieldTab = createBottomTabNavigator<FieldTabParamList>();
 // ─── タブバー ─────────────────────────────────────────────────────────────
 
 const TAB_LABELS: Record<string, string> = {
-  Dashboard: 'ホーム',
-  Knowledge: '知識',
-  Chat:      '対話',
-  Plan:      'プラン',
+  Dashboard:  'ホーム',
+  Knowledge:  '知識',
+  Chat:       '対話',
+  Experience: '記録',
 };
 
 function TabIcon({ name, focused }: { name: string; focused: boolean }) {
@@ -71,7 +71,7 @@ function TabIcon({ name, focused }: { name: string; focused: boolean }) {
   if (name === 'Dashboard') return focused ? <HomeIconSolid {...p} /> : <HomeIcon {...p} />;
   if (name === 'Knowledge') return focused ? <BookOpenIconSolid {...p} /> : <BookOpenIcon {...p} />;
   if (name === 'Chat')      return focused ? <ChatIconSolid {...p} /> : <ChatBubbleOvalLeftIcon {...p} />;
-  if (name === 'Plan')      return focused ? <PlanIconSolid {...p} /> : <ClipboardDocumentListIcon {...p} />;
+  if (name === 'Experience') return focused ? <LogIconSolid {...p} /> : <ClipboardDocumentListIcon {...p} />;
   return null;
 }
 
@@ -154,8 +154,8 @@ function FieldTabNavigator({ route }: { route: RouteProp<RootStackParamList, 'Fi
         <FieldTab.Screen name="Dashboard" component={DashboardScreen} />
         <FieldTab.Screen name="Knowledge" component={KnowledgeScreen} />
         <FieldTab.Screen name="_FieldLog" component={EmptyScreen} />
-        <FieldTab.Screen name="Chat"      component={ChatScreen} />
-        <FieldTab.Screen name="Plan"      component={PlanScreen} />
+        <FieldTab.Screen name="Chat"       component={ChatScreen} />
+        <FieldTab.Screen name="Experience" component={ExperienceScreen} />
       </FieldTab.Navigator>
     </FieldProvider>
   );
