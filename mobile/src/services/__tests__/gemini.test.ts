@@ -1,26 +1,4 @@
-import { toStatus, SCORE_DELTA } from '../gemini';
-
-// ── toStatus ────────────────────────────────────────────────────────────────
-
-describe('toStatus', () => {
-  it('0.8以上はverified', () => {
-    expect(toStatus(0.8)).toBe('verified');
-    expect(toStatus(0.9)).toBe('verified');
-    expect(toStatus(1.0)).toBe('verified');
-  });
-
-  it('0.2以下はdisproved', () => {
-    expect(toStatus(0.2)).toBe('disproved');
-    expect(toStatus(0.1)).toBe('disproved');
-    expect(toStatus(0.0)).toBe('disproved');
-  });
-
-  it('0.2超〜0.8未満はhypothesis', () => {
-    expect(toStatus(0.21)).toBe('hypothesis');
-    expect(toStatus(0.5)).toBe('hypothesis');
-    expect(toStatus(0.79)).toBe('hypothesis');
-  });
-});
+import { SCORE_DELTA } from '../gemini';
 
 // ── SCORE_DELTA ─────────────────────────────────────────────────────────────
 

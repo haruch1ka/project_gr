@@ -21,13 +21,13 @@ afterEach(async () => {
 
 const payload = {
   field: '釣り',
+  type: 'hypothesis',
   category: 'テクニック',
   content: 'フローティングミノーは澄み潮に効く',
   webSources: [],
   supportingExperiences: [],
   contradictingExperiences: [],
   confidenceScore: 0.3,
-  status: 'hypothesis',
   tags: [],
 };
 
@@ -48,14 +48,14 @@ describe('GET /knowledge', () => {
     expect(res.body[0].field).toBe('釣り');
   });
 
-  it('statusクエリでフィルタリングできる', async () => {
+  it('typeクエリでフィルタリングできる', async () => {
     await request(app).post('/knowledge').send(payload);
-    await request(app).post('/knowledge').send({ ...payload, status: 'verified', confidenceScore: 0.9 });
+    await request(app).post('/knowledge').send({ ...payload, type: 'distilled', confidenceScore: 0.9 });
 
-    const res = await request(app).get('/knowledge?status=hypothesis');
+    const res = await request(app).get('/knowledge?type=hypothesis');
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(1);
-    expect(res.body[0].status).toBe('hypothesis');
+    expect(res.body[0].type).toBe('hypothesis');
   });
 });
 
@@ -66,7 +66,7 @@ describe('POST /knowledge', () => {
     expect(res.body._id).toBeDefined();
     expect(res.body.content).toBe(payload.content);
     expect(res.body.field).toBe(payload.field);
-    expect(res.body.status).toBe('hypothesis');
+    expect(res.body.type).toBe('hypothesis');
   });
 });
 
@@ -87,17 +87,16 @@ describe('GET /knowledge/:id', () => {
 });
 
 describe('PATCH /knowledge/:id', () => {
-  it('confidenceScoreとstatusを更新できる', async () => {
+  it('confidenceScoreを更新できる', async () => {
     const created = await request(app).post('/knowledge').send(payload);
     const id = created.body._id;
 
     const res = await request(app)
       .patch(`/knowledge/${id}`)
-      .send({ confidenceScore: 0.85, status: 'verified' });
+      .send({ confidenceScore: 0.85 });
 
     expect(res.status).toBe(200);
     expect(res.body.confidenceScore).toBe(0.85);
-    expect(res.body.status).toBe('verified');
   });
 
   it('存在しないIDで404を返す', async () => {

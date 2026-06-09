@@ -11,7 +11,7 @@ const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/
 // 尤度係数
 const LIKELIHOOD_FACTOR: Record<string, number> = { high: 1.0, medium: 0.6, low: 0.3 };
 
-function updateScore(score: number, direction: string, likelihood: string): number {
+export function updateScore(score: number, direction: string, likelihood: string): number {
   const factor = LIKELIHOOD_FACTOR[likelihood] ?? 0.3;
   if (direction === 'supporting')   return Math.min(1, score * (1 + 0.1 * factor));
   if (direction === 'contradicting') return Math.max(0, score * (1 - 0.15 * factor));

@@ -18,13 +18,13 @@ describe('storageKey', () => {
 
 const baseKnowledge: Knowledge = {
   field: '釣り',
+  type: 'hypothesis',
   category: 'テクニック',
   content: 'フローティングミノーは澄み潮に効く',
   webSources: [],
   supportingExperiences: [],
   contradictingExperiences: [],
   confidenceScore: 0.5,
-  status: 'hypothesis',
   tags: [],
   createdAt: '2024-01-01',
 };
@@ -48,20 +48,25 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('（まだ経験ログがありません）');
   });
 
-  it('仮説ステータスの知識が「仮説」ラベルで表示される', () => {
-    const prompt = buildSystemPrompt('釣り', [{ ...baseKnowledge, status: 'hypothesis', confidenceScore: 0.5 }], []);
+  it('hypothesis・低スコアの知識が「仮説」ラベルで表示される', () => {
+    const prompt = buildSystemPrompt('釣り', [{ ...baseKnowledge, type: 'hypothesis', confidenceScore: 0.5 }], []);
     expect(prompt).toContain('[仮説 50%]');
     expect(prompt).toContain('フローティングミノーは澄み潮に効く');
   });
 
-  it('verifiedステータスの知識が「検証済」ラベルで表示される', () => {
-    const prompt = buildSystemPrompt('釣り', [{ ...baseKnowledge, status: 'verified', confidenceScore: 0.85 }], []);
-    expect(prompt).toContain('[検証済 85%]');
+  it('hypothesis・高スコアの知識が「確信」ラベルで表示される', () => {
+    const prompt = buildSystemPrompt('釣り', [{ ...baseKnowledge, type: 'hypothesis', confidenceScore: 0.85 }], []);
+    expect(prompt).toContain('[確信 85%]');
   });
 
-  it('disprovedステータスの知識が「反証」ラベルで表示される', () => {
-    const prompt = buildSystemPrompt('釣り', [{ ...baseKnowledge, status: 'disproved', confidenceScore: 0.1 }], []);
-    expect(prompt).toContain('[反証 10%]');
+  it('distilledの知識が「発見」ラベルで表示される', () => {
+    const prompt = buildSystemPrompt('釣り', [{ ...baseKnowledge, type: 'distilled', confidenceScore: 0.6 }], []);
+    expect(prompt).toContain('[発見 60%]');
+  });
+
+  it('hypothesis・低スコア（0.3未満）が「疑問」ラベルで表示される', () => {
+    const prompt = buildSystemPrompt('釣り', [{ ...baseKnowledge, type: 'hypothesis', confidenceScore: 0.1 }], []);
+    expect(prompt).toContain('[疑問 10%]');
   });
 
   it('経験ログが日付・メモ形式で含まれる', () => {

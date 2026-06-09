@@ -85,12 +85,6 @@ export const SCORE_DELTA: Record<EvidenceItem['relation'], Record<EvidenceItem['
   neutral:       { high: 0, medium: 0, low: 0 },
 };
 
-export function toStatus(score: number): Knowledge['status'] {
-  if (score >= 0.8) return 'verified';
-  if (score <= 0.2) return 'disproved';
-  return 'hypothesis';
-}
-
 export async function updateKnowledgeFromExperience(
   field: string,
   experienceMemo: string,
@@ -121,7 +115,7 @@ export async function updateKnowledgeFromExperience(
 
     const delta    = SCORE_DELTA[item.relation][item.likelihood] ?? 0;
     const newScore = Math.max(0, Math.min(1, k.confidenceScore + delta));
-    await knowledgeApi.patch(k._id, { confidenceScore: newScore, status: toStatus(newScore) });
+    await knowledgeApi.patch(k._id, { confidenceScore: newScore });
   }
 }
 

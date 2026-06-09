@@ -1,4 +1,5 @@
 import { Knowledge, Experience } from '../types';
+import { knowledgeLabel } from './knowledge';
 
 export function storageKey(field: string): string {
 	return `chat_history:${field}`;
@@ -9,7 +10,7 @@ export function buildSystemPrompt(field: string, knowledge: Knowledge[], experie
 		knowledge.length > 0
 			? knowledge
 					.map((k) => {
-						const label = k.status === 'verified' ? '検証済' : k.status === 'disproved' ? '反証' : '仮説';
+						const label = knowledgeLabel(k);
 						return `- [${label} ${Math.round(k.confidenceScore * 100)}%] ${k.content}`;
 					})
 					.join('\n')
