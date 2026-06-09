@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
-  View, Text, StyleSheet, FlatList, ActivityIndicator,
+  View, Text, StyleSheet, FlatList, ActivityIndicator, RefreshControl,
 } from 'react-native';
 import { useField } from '../context/FieldContext';
 import { colors, font } from '../constants/theme';
@@ -9,12 +9,9 @@ import { experienceApi } from '../services/api';
 import { Experience } from '../types/index';
 
 function ExperienceItem({ item }: { item: Experience }) {
-  const dateStr = item.date
-    ? new Date(item.date).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })
-    : '';
   return (
     <View style={styles.item}>
-      <Text style={styles.date}>{dateStr}</Text>
+      <Text style={styles.date}>{item.date}</Text>
       <Text style={styles.memo}>{item.memo}</Text>
     </View>
   );
@@ -24,10 +21,11 @@ export default function ExperienceScreen() {
   const { activeField: field } = useField();
   const [logs, setLogs] = useState<Experience[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const fetchLogs = useCallback(async () => {
+  const fetchLogs = useCallback(async (refresh = false) => {
     if (!field) { setLoading(false); return; }
-    setLoading(true);
+    if (!refresh) setLoading(true);
     try {
       const data = await experienceApi.list(field);
       setLogs(data);
@@ -35,8 +33,11 @@ export default function ExperienceScreen() {
       console.error(e);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [field]);
+
+  const onRefresh = useCallback(() => { setRefreshing(true); fetchLogs(true); }, [fetchLogs]);
 
   useEffect(() => { fetchLogs(); }, [fetchLogs]);
 
@@ -64,6 +65,9 @@ export default function ExperienceScreen() {
             </View>
           }
           renderItem={({ item }) => <ExperienceItem item={item} />}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+          }
         />
       )}
     </SafeAreaView>

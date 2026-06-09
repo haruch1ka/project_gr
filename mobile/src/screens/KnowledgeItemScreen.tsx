@@ -11,22 +11,11 @@ import { colors, font, radius } from '../constants/theme';
 import { ArrowLeftIcon, TrashIcon, XMarkIcon, PlusIcon } from 'react-native-heroicons/outline';
 import { knowledgeApi } from '../services/api';
 import { Knowledge } from '../types';
+import { knowledgeColor, knowledgeLabel } from '../utils/knowledge';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'KnowledgeItem'>;
   route: RouteProp<RootStackParamList, 'KnowledgeItem'>;
-};
-
-const STATUS_COLOR: Record<Knowledge['status'], string> = {
-  verified:   colors.primary,
-  hypothesis: colors.amber,
-  disproved:  colors.danger,
-};
-
-const STATUS_LABEL: Record<Knowledge['status'], string> = {
-  verified:   '検証済',
-  hypothesis: '仮説',
-  disproved:  '反証',
 };
 
 export default function KnowledgeItemScreen({ navigation, route }: Props) {
@@ -110,7 +99,7 @@ export default function KnowledgeItemScreen({ navigation, route }: Props) {
   if (!knowledge) return null;
 
   const pct   = Math.round(knowledge.confidenceScore * 100);
-  const color = STATUS_COLOR[knowledge.status];
+  const color = knowledgeColor(knowledge);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -134,7 +123,7 @@ export default function KnowledgeItemScreen({ navigation, route }: Props) {
           <View style={styles.metaCard}>
             <View style={styles.metaRow}>
               <View style={[styles.statusBadge, { borderColor: color }]}>
-                <Text style={[styles.statusText, { color }]}>{STATUS_LABEL[knowledge.status]}</Text>
+                <Text style={[styles.statusText, { color }]}>{knowledgeLabel(knowledge)}</Text>
               </View>
               <Text style={[styles.pct, { color }]}>{pct}%</Text>
             </View>

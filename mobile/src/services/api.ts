@@ -1,4 +1,4 @@
-import { Experience, Knowledge, KnowledgeFolder, Plan, Field } from '../types';
+import { Experience, Knowledge, KnowledgeFolder, KnowledgeProposal, Plan, Field } from '../types';
 
 const BASE_URL = 'https://project-gr-back.vercel.app';
 
@@ -23,7 +23,7 @@ export const experienceApi = {
 };
 
 export const knowledgeApi = {
-  list: (params?: { field?: string; status?: string }) => {
+  list: (params?: { field?: string; type?: string }) => {
     const q = new URLSearchParams(params as Record<string, string>).toString();
     return request<Knowledge[]>(`/knowledge${q ? `?${q}` : ''}`);
   },
@@ -53,6 +53,13 @@ export const fieldApi = {
     request<Field>('/fields', { method: 'POST', body: JSON.stringify(body) }),
   remove: (id: string) =>
     request<{ ok: boolean }>(`/fields/${id}`, { method: 'DELETE' }),
+};
+
+export const proposalApi = {
+  fetch: (field: string) =>
+    request<{ proposal: KnowledgeProposal | null }>(`/proposals?field=${encodeURIComponent(field)}`),
+  reject: (id: string) =>
+    request<{ ok: boolean }>(`/proposals/${id}`, { method: 'DELETE' }),
 };
 
 export const planApi = {

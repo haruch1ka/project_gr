@@ -39,19 +39,24 @@
 ```typescript
 {
   field: string,
+  type: 'hypothesis' | 'distilled',             // 起源（不変）
+  // hypothesis: Web情報から生成された仮説。経験で検証される
+  // distilled: 経験ログのパターンからGeminiが析出した知識
   category: string,                              // ユーザー定義のカテゴリ
   subcategory: string,                           // サブカテゴリ（省略可）
   folderId: string | null,                       // 所属フォルダ（省略可）
   content: string,
-  webSources: ResearchResult[],                  // 元になったWeb情報
+  webSources: ResearchResult[],                  // 元になったWeb情報（hypothesisのみ）
   supportingExperiences: Experience[],           // 裏付けた経験
   contradictingExperiences: Experience[],        // 反例になった経験
-  confidenceScore: number,                       // ベイズ的に更新
-  status: 'hypothesis' | 'verified' | 'disproved',  // 閾値設計は未決定
+  confidenceScore: number,                       // ベイズ的に更新（0〜1）
+  sourceKnowledgeId: string | null,              // distilledが参照するhypothesisのID（任意）
   tags: string[],
   createdAt: Date,
 }
 ```
+
+`status`フィールドは廃止。確信度は`confidenceScore`の連続値のみで表現する（UIがスコア範囲で視覚的に表示）。
 
 ### Plan（行動プラン）
 
@@ -77,6 +82,26 @@
   usedInKnowledgeIds: string[],  // 紐付いたKnowledgeのID
 }
 ```
+
+### KnowledgeProposal（端末一時保存・DB不使用）
+
+経験ログ投稿後にGeminiが検出したdistilled候補。ユーザーが確認するまでAsyncStorageにのみ保持される。
+
+```typescript
+{
+  field: string,
+  content: string,
+  confidenceScore: number,
+  supportingExperienceIds: string[],
+  sourceKnowledgeId: string | null,
+  detectedAt: Date,
+}
+```
+
+- 確認タップ → `POST /knowledge`（distilledとしてDB登録）→ AsyncStorageから削除
+- 却下タップ → AsyncStorageから削除（DBには何も残らない）
+
+---
 
 ### MetaKnowledge（classレベルの知識）※MVP後
 

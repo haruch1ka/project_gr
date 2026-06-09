@@ -45,9 +45,9 @@ export default function ChatScreen() {
 				if (saved.length >= ACTION_THRESHOLD) setShowActions(true);
 			} else {
 				const summary = {
-					verified: k.filter((x) => x.status === "verified").length,
-					hypothesis: k.filter((x) => x.status === "hypothesis").length,
-					disproved: k.filter((x) => x.status === "disproved").length,
+					distilled:   k.filter((x) => x.type === "distilled").length,
+					hypothesis:  k.filter((x) => x.type === "hypothesis").length,
+					highConfidence: k.filter((x) => x.confidenceScore >= 0.7).length,
 				};
 				const opening = await generateOpeningQuestion(field, e, summary);
 				const initial = [{ role: "assistant" as const, text: opening }];
@@ -156,7 +156,7 @@ export default function ChatScreen() {
 				supportingExperiences: [],
 				contradictingExperiences: [],
 				confidenceScore: 0.3,
-				status: "hypothesis",
+				type: "hypothesis",
 				tags: [],
 			});
 			setMessages((prev) => [

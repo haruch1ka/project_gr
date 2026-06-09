@@ -276,7 +276,7 @@ const QUESTION_ANGLES = [
 export async function generateOpeningQuestion(
   field: string,
   experiences: Experience[],
-  knowledgeSummary: { verified: number; hypothesis: number; disproved: number },
+  knowledgeSummary: { distilled: number; hypothesis: number; highConfidence: number },
 ): Promise<string> {
   const recentMemos = experiences
     .slice(0, 3)
@@ -289,7 +289,7 @@ export async function generateOpeningQuestion(
 ${recentMemos || '（まだログなし）'}
 
 【知識の状態】
-検証済: ${knowledgeSummary.verified}件 / 仮説: ${knowledgeSummary.hypothesis}件 / 反証: ${knowledgeSummary.disproved}件
+高確信: ${knowledgeSummary.highConfidence}件 / 仮説: ${knowledgeSummary.hypothesis}件 / 経験から発見: ${knowledgeSummary.distilled}件
 
 以下の観点から最も文脈に合うものを選び、経験ログの内容を織り交ぜた一文の問いかけを生成してください。
 

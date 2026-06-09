@@ -26,13 +26,12 @@ const DONUT_SIZE = 96;
 const CIRCUMFERENCE = 2 * Math.PI * DONUT_R;
 const CENTER = DONUT_SIZE / 2;
 
-function DonutChart({ verified, hypothesis, disproved, total }: {
-  verified: number; hypothesis: number; disproved: number; total: number;
+function DonutChart({ confident, hypothesis, total }: {
+  confident: number; hypothesis: number; total: number;
 }) {
   const segments = [
-    { value: verified,    color: colors.primary },
-    { value: hypothesis,  color: colors.textSecondary },
-    { value: disproved,   color: colors.danger },
+    { value: confident,  color: colors.primary },
+    { value: hypothesis, color: colors.textSecondary },
   ];
 
   let offset = 0;
@@ -95,9 +94,9 @@ function Sparkline({ data, color, width = 60, height = 28 }: {
 
 function KnowledgeStatusChart({ fields }: { fields: Field[] }) {
   const all = mockKnowledge;
-  const verified = all.filter(k => k.status === 'verified').length;
-  const disproved = all.filter(k => k.status === 'disproved').length;
-  const hypothesis = all.length - verified - disproved;
+  const distilled  = all.filter(k => k.type === 'distilled').length;
+  const confident  = all.filter(k => k.type === 'hypothesis' && k.confidenceScore >= 0.7).length;
+  const hypothesis = all.length - distilled - confident;
   const total = all.length || 1;
 
   const avgScore = Math.round(
@@ -110,25 +109,19 @@ function KnowledgeStatusChart({ fields }: { fields: Field[] }) {
     <View style={styles.chartCard}>
       <Text style={styles.chartTitle}>知識の状態（全体）</Text>
       <View style={styles.chartRow}>
-        <DonutChart verified={verified} hypothesis={hypothesis} disproved={disproved} total={total} />
+        <DonutChart confident={distilled + confident} hypothesis={hypothesis} total={total} />
         <View style={styles.legendWrap}>
           <View style={styles.legendRow}>
             <StatusDot color={colors.primary} />
-            <Text style={styles.legendText}>検証済</Text>
-            <Text style={styles.legendNum}>{verified}</Text>
-            <Text style={styles.legendPct}>{Math.round(verified / total * 100)}%</Text>
+            <Text style={styles.legendText}>高確信</Text>
+            <Text style={styles.legendNum}>{distilled + confident}</Text>
+            <Text style={styles.legendPct}>{Math.round((distilled + confident) / total * 100)}%</Text>
           </View>
           <View style={styles.legendRow}>
             <StatusDot color={colors.textMuted} />
             <Text style={styles.legendText}>仮説</Text>
             <Text style={styles.legendNum}>{hypothesis}</Text>
             <Text style={styles.legendPct}>{Math.round(hypothesis / total * 100)}%</Text>
-          </View>
-          <View style={styles.legendRow}>
-            <StatusDot color={colors.danger} />
-            <Text style={styles.legendText}>反証</Text>
-            <Text style={styles.legendNum}>{disproved}</Text>
-            <Text style={styles.legendPct}>{Math.round(disproved / total * 100)}%</Text>
           </View>
         </View>
       </View>
@@ -213,7 +206,7 @@ export default function HomeScreen() {
         {fields.map(field => {
           const fieldKnowledge = mockKnowledge.filter(k => k.field === field.name);
           const kCount = fieldKnowledge.length;
-          const verifiedCount = fieldKnowledge.filter(k => k.status === 'verified').length;
+          const verifiedCount = fieldKnowledge.filter(k => k.confidenceScore >= 0.7).length;
           const exps = mockExperiences[field.name] ?? [];
           const lastDate = exps[0]?.date ?? '—';
           // スパークライン用：各知識の確信度を並べる

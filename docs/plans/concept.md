@@ -59,18 +59,34 @@ confidenceScoreは「この知識が一般的に正しいか」ではなく、**
 ```
 ① 経験ログ記録（軽量・摩擦ゼロ）
    「今日こんなことをやった」を書くだけでよい
-   仮説を意識する必要はない → Geminiが自動で関連Knowledgeと紐付ける
 
-② Gemini対話による統合（重量・深い問い）
+   投稿後、バックグラウンドでGeminiが2つの処理を実行：
+   
+   [処理A] hypothesis紐付け
+     既存のhypothesisと経験を照合
+     → 支持/反証を判定してconfidenceScoreを更新（DBに直接書く）
+   
+   [処理B] distilled検出
+     当該分野の経験ログ全体を走査
+     → パターンが見えたらdistilled候補を生成
+     → 端末のAsyncStorageに一時保存
+
+② Dashboardで提案を受け取る
+   Dashboard表示時にAsyncStorageを確認
+   → 提案があれば表示（なければGET /proposalsを叩く）
+   → 確認タップ → POST /knowledge（distilledとしてDB登録）
+   → 却下タップ → AsyncStorageから削除
+
+③ Gemini対話による統合（重量・深い問い）
    経験 × Web情報 × 知識プールを文脈に
    対話後にアクション選択肢を提示
      [ プラン提案 / グラフ表示 / 知識保存 ]
 
-③ 知識が育つ
-   hypothesis → verified / disproved
-   信頼度スコアが経験で上下
+④ 知識が育つ
+   confidenceScoreが経験で上下（statusは存在しない）
+   UIがスコア範囲に応じて視覚的に「育っている感」を表現
 
-④ 体系化された知識 → 次の行動プランへ → ①に戻る
+⑤ 体系化された知識 → 次の行動プランへ → ①に戻る
 ```
 
 ---
@@ -91,16 +107,21 @@ confidenceScoreは「この知識が一般的に正しいか」ではなく、**
 ```typescript
 {
   field: string,
+  type: 'hypothesis' | 'distilled',             // 起源（不変）
   category: string,                              // ユーザー定義のカテゴリ
   content: string,
-  webSources: ResearchResult[],                  // 元になったWeb情報
+  webSources: ResearchResult[],                  // 元になったWeb情報（hypothesisのみ）
   supportingExperiences: Experience[],           // 裏付けた経験
   contradictingExperiences: Experience[],        // 反例になった経験
-  confidenceScore: number,
-  status: 'hypothesis' | 'verified' | 'disproved',  // 閾値設計は未決定
+  confidenceScore: number,                       // 0〜1の連続値（statusは廃止）
+  sourceKnowledgeId: string | null,              // distilledが参照するhypothesisのID
   tags: string[],
 }
 ```
+
+知識の2種類：
+- `hypothesis`：Web情報から生成された仮説。経験によってconfidenceScoreが更新される
+- `distilled`：経験ログの蓄積からGeminiが析出した個人的パターン。最初から自分の知識
 
 ### Plan（行動プラン）
 ```typescript

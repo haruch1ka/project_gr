@@ -4,6 +4,7 @@ const experienceSchema = new Schema({
   field:     { type: String, required: true },
   date:      { type: String, required: true },
   memo:      { type: String, required: true },
+  analyzed:  { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now },
 });
 

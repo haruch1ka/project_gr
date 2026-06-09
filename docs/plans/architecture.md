@@ -119,6 +119,7 @@ RootStack（NativeStack）
 | `/plans/:id` | PATCH / DELETE | 更新・削除 |
 | `/fields` | GET / POST | 分野一覧・作成 |
 | `/fields/:id` | DELETE | 削除 |
+| `/proposals` | GET | distilled候補の取得（field指定）。経験ログ投稿後のバックグラウンド処理で生成される |
 | `/gemini/generate` | POST | Gemini API プロキシ |
 | `/tavily/search` | POST | Tavily キーワード検索プロキシ |
 | `/tavily/extract` | POST | Tavily URL抽出プロキシ |

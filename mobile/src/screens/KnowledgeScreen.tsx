@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import {
   View, Text, TouchableOpacity, StyleSheet,
   ScrollView, ActivityIndicator, Animated, PanResponder, Alert,
+  Modal, TextInput, RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -13,6 +14,7 @@ import {
 import { knowledgeApi, folderApi } from '../services/api';
 import { reorganizeIntoFolders, GeminiRateLimitError } from '../services/gemini';
 import { Knowledge, KnowledgeFolder } from '../types';
+import { knowledgeColor, knowledgeLabel } from '../utils/knowledge';
 import { RootStackParamList } from '../../App';
 import { useField } from '../context/FieldContext';
 
@@ -20,35 +22,23 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 type BreadcrumbEntry = { id: string | null; title: string };
 
-const STATUS_COLOR: Record<Knowledge['status'], string> = {
-  verified:   colors.primary,
-  hypothesis: colors.textSecondary,
-  disproved:  colors.danger,
-};
-
-const STATUS_CHIPS: Array<{ value: Knowledge['status']; label: string; color: string }> = [
-  { value: 'verified',   label: '検証済', color: colors.primary },
-  { value: 'hypothesis', label: '仮説',   color: colors.amber },
-  { value: 'disproved',  label: '反証',   color: colors.danger },
-];
-
 const INDENT_SIZE   = 16;
 const DELETE_BTN_W  = 72;
 
 // ─── ステータスサマリー ────────────────────────────────────────────────────
 
 function StatusSummary({ items }: { items: Knowledge[] }) {
-  const verified  = items.filter(k => k.status === 'verified').length;
-  const hypo      = items.filter(k => k.status === 'hypothesis').length;
-  const disproved = items.filter(k => k.status === 'disproved').length;
+  const distilled  = items.filter(k => k.type === 'distilled').length;
+  const confident  = items.filter(k => k.type === 'hypothesis' && k.confidenceScore >= 0.7).length;
+  const hypo       = items.filter(k => k.type === 'hypothesis' && k.confidenceScore < 0.7).length;
   const total = items.length || 1;
   return (
     <View style={styles.summaryCard}>
       <View style={styles.summaryRow}>
         {[
-          { label: '検証済', count: verified,  color: colors.primary },
+          { label: '発見',   count: distilled, color: colors.primary },
+          { label: '確信',   count: confident, color: colors.primary },
           { label: '仮説',   count: hypo,      color: colors.textSecondary },
-          { label: '反証',   count: disproved, color: colors.danger },
         ].map(({ label, count, color }) => (
           <View key={label} style={styles.summaryItem}>
             <View style={[styles.summaryDot, { backgroundColor: color }]} />
@@ -58,9 +48,8 @@ function StatusSummary({ items }: { items: Knowledge[] }) {
         ))}
       </View>
       <View style={styles.triBar}>
-        <View style={{ flex: verified,  backgroundColor: colors.primary,       borderRadius: 2 }} />
-        <View style={{ flex: hypo,      backgroundColor: colors.textSecondary, borderRadius: 2 }} />
-        <View style={{ flex: disproved, backgroundColor: colors.danger,        borderRadius: 2 }} />
+        <View style={{ flex: distilled + confident, backgroundColor: colors.primary,       borderRadius: 2 }} />
+        <View style={{ flex: hypo,                  backgroundColor: colors.textSecondary, borderRadius: 2 }} />
         {total === 0 && <View style={{ flex: 1, backgroundColor: colors.border }} />}
       </View>
     </View>
@@ -70,14 +59,17 @@ function StatusSummary({ items }: { items: Knowledge[] }) {
 // ─── ファセットバー ────────────────────────────────────────────────────────
 
 type FacetBarProps = {
-  filterStatus:     Set<Knowledge['status']>;
   filterCategories: Set<string>;
   filterTags:       Set<string>;
+  filterCustom:     Set<string>;
   categories:       string[];
   tags:             string[];
-  onToggleStatus:   (s: Knowledge['status']) => void;
+  customFilters:    string[];
   onToggleCategory: (c: string) => void;
   onToggleTag:      (t: string) => void;
+  onToggleCustom:   (w: string) => void;
+  onRemoveCustom:   (w: string) => void;
+  onAddFilter:      () => void;
 };
 
 function ActiveChip({ label, color, onPress }: { label: string; color: string; onPress: () => void }) {
@@ -95,6 +87,27 @@ function ActiveChip({ label, color, onPress }: { label: string; color: string; o
   );
 }
 
+function CustomChip({ label, active, onToggle, onRemove }: {
+  label: string; active: boolean; onToggle: () => void; onRemove: () => void;
+}) {
+  return (
+    <View style={[styles.customChip, active && { backgroundColor: colors.purple, borderWidth: 0 }]}>
+      <TouchableOpacity onPress={onToggle} activeOpacity={0.7} style={{ justifyContent: 'center' }}>
+        <Text style={active ? styles.chipOnText : styles.chipCustomText}>{label}</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        onPress={onRemove}
+        activeOpacity={0.7}
+        hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+      >
+        <View style={active ? styles.chipClose : styles.chipCloseGray}>
+          <Text style={active ? styles.chipCloseX : styles.chipCloseXGray}>×</Text>
+        </View>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 function InactiveChip({ label, onPress }: { label: string; onPress: () => void }) {
   return (
     <TouchableOpacity style={styles.chip} onPress={onPress} activeOpacity={0.7}>
@@ -104,9 +117,9 @@ function InactiveChip({ label, onPress }: { label: string; onPress: () => void }
 }
 
 function FacetBar({
-  filterStatus, filterCategories, filterTags,
-  categories, tags,
-  onToggleStatus, onToggleCategory, onToggleTag,
+  filterCategories, filterTags, filterCustom,
+  categories, tags, customFilters,
+  onToggleCategory, onToggleTag, onToggleCustom, onRemoveCustom, onAddFilter,
 }: FacetBarProps) {
   return (
     <ScrollView
@@ -115,12 +128,6 @@ function FacetBar({
       style={styles.facetBar}
       contentContainerStyle={styles.facetBarContent}
     >
-      {STATUS_CHIPS.map(({ value, label, color }) =>
-        filterStatus.has(value)
-          ? <ActiveChip   key={value} label={label} color={color}       onPress={() => onToggleStatus(value)} />
-          : <InactiveChip key={value} label={label}                     onPress={() => onToggleStatus(value)} />
-      )}
-
       {categories.length > 0 && (
         <>
           <View style={styles.chipDivider} />
@@ -143,10 +150,25 @@ function FacetBar({
         </>
       )}
 
-      <View style={styles.chipAdd}>
+      {customFilters.length > 0 && (
+        <>
+          {(categories.length > 0 || tags.length > 0) && <View style={styles.chipDivider} />}
+          {customFilters.map(w => (
+            <CustomChip
+              key={w}
+              label={w}
+              active={filterCustom.has(w)}
+              onToggle={() => onToggleCustom(w)}
+              onRemove={() => onRemoveCustom(w)}
+            />
+          ))}
+        </>
+      )}
+
+      <TouchableOpacity style={styles.chipAdd} onPress={onAddFilter} activeOpacity={0.7}>
         <Text style={styles.chipAddPlus}>＋</Text>
         <Text style={styles.chipAddText}>フィルター</Text>
-      </View>
+      </TouchableOpacity>
     </ScrollView>
   );
 }
@@ -339,7 +361,7 @@ function KnowledgeItem({ item, onDelete, indent = 0 }: {
   };
 
   const pct      = Math.round(item.confidenceScore * 100);
-  const color    = STATUS_COLOR[item.status];
+  const color    = knowledgeColor(item);
   const indentPx = indent * INDENT_SIZE;
 
   return (
@@ -374,38 +396,53 @@ export default function KnowledgeScreen() {
   const [allFolders,     setAllFolders]     = useState<KnowledgeFolder[]>([]);
   const [allKnowledge,   setAllKnowledge]   = useState<Knowledge[]>([]);
   const [loading,        setLoading]        = useState(true);
+  const [refreshing,     setRefreshing]     = useState(false);
   const [stack,          setStack]          = useState<BreadcrumbEntry[]>([{ id: null, title: '知識' }]);
   const [expandedFolders,setExpandedFolders]= useState<Set<string>>(new Set());
   const [reclassifying,  setReclassifying]  = useState(false);
 
-  const [filterStatus,     setFilterStatus]     = useState<Set<Knowledge['status']>>(new Set());
   const [filterCategories, setFilterCategories] = useState<Set<string>>(new Set());
   const [filterTags,       setFilterTags]       = useState<Set<string>>(new Set());
+  const [filterCustom,     setFilterCustom]     = useState<Set<string>>(new Set());
+  const [customFilters,    setCustomFilters]    = useState<string[]>([]);
+  const [addFilterVisible, setAddFilterVisible] = useState(false);
+  const [addFilterText,    setAddFilterText]    = useState('');
 
-  const facetActive = filterStatus.size > 0 || filterCategories.size > 0 || filterTags.size > 0;
+  const facetActive = filterCategories.size > 0 || filterTags.size > 0 || filterCustom.size > 0;
 
   const uniqueCategories = useMemo(
-    () => [...new Set(allKnowledge.map(k => k.category).filter(Boolean))].sort(),
+    () => [...new Set(allKnowledge.map(k => k.category).filter(Boolean))]
+      .filter(c => !c.includes(' '))
+      .sort(),
     [allKnowledge],
   );
   const uniqueTags = useMemo(
-    () => [...new Set(allKnowledge.flatMap(k => k.tags ?? []))].sort(),
+    () => [...new Set(allKnowledge.flatMap(k => k.tags ?? []))]
+      .filter(t => !t.includes(' '))
+      .sort(),
     [allKnowledge],
   );
   const filteredKnowledge = useMemo(() => {
     if (!facetActive) return allKnowledge;
     return allKnowledge.filter(k => {
-      if (filterStatus.size > 0     && !filterStatus.has(k.status))                  return false;
       if (filterCategories.size > 0 && !filterCategories.has(k.category))            return false;
       if (filterTags.size > 0       && !(k.tags ?? []).some(t => filterTags.has(t))) return false;
+      if (filterCustom.size > 0) {
+        const hit = [...filterCustom].some(w => {
+          const lw = w.toLowerCase();
+          return k.category?.toLowerCase().includes(lw) ||
+                 (k.tags ?? []).some(t => t.toLowerCase().includes(lw));
+        });
+        if (!hit) return false;
+      }
       return true;
     });
-  }, [allKnowledge, filterStatus, filterCategories, filterTags, facetActive]);
+  }, [allKnowledge, filterCategories, filterTags, filterCustom, facetActive]);
 
   const currentFolderId = stack[stack.length - 1].id;
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (refresh = false) => {
+    if (!refresh) setLoading(true);
     try {
       const [folders, knowledge] = await Promise.all([
         folderApi.list(field).catch(() => [] as KnowledgeFolder[]),
@@ -417,17 +454,21 @@ export default function KnowledgeScreen() {
       console.error(e);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [field]);
+
+  const onRefresh = useCallback(() => { setRefreshing(true); load(true); }, [load]);
 
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
     setStack([{ id: null, title: '知識' }]);
     setExpandedFolders(new Set());
-    setFilterStatus(new Set());
     setFilterCategories(new Set());
     setFilterTags(new Set());
+    setFilterCustom(new Set());
+    setCustomFilters([]);
   }, [field]);
 
   const visibleFolders = allFolders.filter(f =>
@@ -472,14 +513,25 @@ export default function KnowledgeScreen() {
     setAllKnowledge(prev => prev.filter(k => k._id !== id));
   }, []);
 
-  function toggleStatus(s: Knowledge['status']) {
-    setFilterStatus(prev => { const n = new Set(prev); n.has(s) ? n.delete(s) : n.add(s); return n; });
-  }
   function toggleCategory(c: string) {
     setFilterCategories(prev => { const n = new Set(prev); n.has(c) ? n.delete(c) : n.add(c); return n; });
   }
   function toggleTag(t: string) {
     setFilterTags(prev => { const n = new Set(prev); n.has(t) ? n.delete(t) : n.add(t); return n; });
+  }
+  function toggleCustom(w: string) {
+    setFilterCustom(prev => { const n = new Set(prev); n.has(w) ? n.delete(w) : n.add(w); return n; });
+  }
+  function removeCustom(w: string) {
+    setCustomFilters(prev => prev.filter(f => f !== w));
+    setFilterCustom(prev => { const n = new Set(prev); n.delete(w); return n; });
+  }
+  function confirmAddFilter() {
+    const word = addFilterText.trim();
+    if (!word || word.includes(' ') || customFilters.includes(word)) return;
+    setCustomFilters(prev => [...prev, word]);
+    setAddFilterText('');
+    setAddFilterVisible(false);
   }
 
   async function handleReclassify() {
@@ -570,14 +622,17 @@ export default function KnowledgeScreen() {
       </ScrollView>
 
       <FacetBar
-        filterStatus={filterStatus}
         filterCategories={filterCategories}
         filterTags={filterTags}
+        filterCustom={filterCustom}
         categories={uniqueCategories}
         tags={uniqueTags}
-        onToggleStatus={toggleStatus}
+        customFilters={customFilters}
         onToggleCategory={toggleCategory}
         onToggleTag={toggleTag}
+        onToggleCustom={toggleCustom}
+        onRemoveCustom={removeCustom}
+        onAddFilter={() => setAddFilterVisible(true)}
       />
 
       {loading ? (
@@ -586,6 +641,9 @@ export default function KnowledgeScreen() {
         <ScrollView
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+          }
         >
           {stack.length === 1 && <StatusSummary items={allKnowledge} />}
 
@@ -640,6 +698,45 @@ export default function KnowledgeScreen() {
           )}
         </ScrollView>
       )}
+
+      <Modal
+        visible={addFilterVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => { setAddFilterVisible(false); setAddFilterText(''); }}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => { setAddFilterVisible(false); setAddFilterText(''); }}
+        >
+          <TouchableOpacity activeOpacity={1} style={styles.modalBox}>
+            <Text style={styles.modalTitle}>フィルターを追加</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={addFilterText}
+              onChangeText={setAddFilterText}
+              placeholder="単語を入力（スペース不可）"
+              placeholderTextColor={colors.textMuted}
+              autoFocus
+              returnKeyType="done"
+              onSubmitEditing={confirmAddFilter}
+              autoCapitalize="none"
+            />
+            <View style={styles.modalBtns}>
+              <TouchableOpacity
+                style={styles.modalBtnCancel}
+                onPress={() => { setAddFilterVisible(false); setAddFilterText(''); }}
+              >
+                <Text style={styles.modalBtnCancelText}>キャンセル</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalBtnConfirm} onPress={confirmAddFilter}>
+                <Text style={styles.modalBtnConfirmText}>追加</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -744,4 +841,19 @@ const styles = StyleSheet.create({
 
   chipDivider:  { width: 1, height: 14, backgroundColor: colors.border, marginHorizontal: 2 },
   filterCount:  { fontSize: font.xs, color: colors.textMuted, textAlign: 'right', marginBottom: 4 },
+
+  customChip:      { height: 32, paddingLeft: 12, paddingRight: 8, borderRadius: 16, borderWidth: 1, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  chipCustomText:  { fontSize: font.xs, fontWeight: '500', color: colors.textSub },
+  chipCloseGray:   { width: 16, height: 16, borderRadius: 8, backgroundColor: colors.border, justifyContent: 'center', alignItems: 'center' },
+  chipCloseXGray:  { fontSize: 10, color: colors.textMuted, textAlign: 'center' as const },
+
+  modalOverlay:        { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
+  modalBox:            { backgroundColor: colors.bgCard, borderRadius: radius.lg, padding: 20, width: 280, gap: 16 },
+  modalTitle:          { fontSize: font.md, fontWeight: '600' as const, color: colors.text },
+  modalInput:          { backgroundColor: colors.bgDeep, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.borderInput, color: colors.text, fontSize: font.sm, padding: 10 },
+  modalBtns:           { flexDirection: 'row', gap: 10 },
+  modalBtnCancel:      { flex: 1, padding: 10, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border, alignItems: 'center' as const },
+  modalBtnCancelText:  { color: colors.textSub, fontSize: font.sm },
+  modalBtnConfirm:     { flex: 1, padding: 10, borderRadius: radius.sm, backgroundColor: colors.blue, alignItems: 'center' as const },
+  modalBtnConfirmText: { color: '#fff', fontSize: font.sm, fontWeight: '600' as const },
 });

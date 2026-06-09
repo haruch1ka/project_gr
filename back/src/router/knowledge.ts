@@ -3,12 +3,12 @@ import { Knowledge } from '../models/Knowledge';
 
 const router = Router();
 
-// 一覧取得（field / status でフィルタ可）
+// 一覧取得（field / type でフィルタ可）
 router.get('/', async (req, res) => {
-  const { field, status } = req.query;
+  const { field, type } = req.query;
   const filter: Record<string, unknown> = {};
-  if (field)  filter.field  = field;
-  if (status) filter.status = status;
+  if (field) filter.field = field;
+  if (type)  filter.type  = type;
   const docs = await Knowledge.find(filter).sort({ createdAt: -1 });
   res.json(docs);
 });
@@ -26,7 +26,7 @@ router.post('/', async (req, res) => {
   res.status(201).json(doc);
 });
 
-// confidenceScore / status 更新
+// confidenceScore 更新
 router.patch('/:id', async (req, res) => {
   const doc = await Knowledge.findByIdAndUpdate(req.params.id, req.body, { new: true });
   if (!doc) return res.status(404).json({ error: 'Not found' });

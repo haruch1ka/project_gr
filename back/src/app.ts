@@ -8,6 +8,7 @@ import planRouter            from './router/plan';
 import fieldRouter           from './router/field';
 import geminiRouter          from './router/gemini';
 import tavilyRouter          from './router/tavily';
+import proposalsRouter       from './router/proposals';
 
 const app = express();
 
@@ -21,6 +22,7 @@ app.use('/plans',             planRouter);
 app.use('/fields',            fieldRouter);
 app.use('/gemini',            geminiRouter);
 app.use('/tavily',            tavilyRouter);
+app.use('/proposals',         proposalsRouter);
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
 

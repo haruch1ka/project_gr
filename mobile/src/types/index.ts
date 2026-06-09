@@ -33,6 +33,7 @@ export type KnowledgeFolder = {
 export type Knowledge = {
   _id?: string;
   field: string;
+  type: 'hypothesis' | 'distilled';
   category: string;
   subcategory?: string;
   folderId?: string | null;
@@ -41,9 +42,19 @@ export type Knowledge = {
   supportingExperiences: Experience[];
   contradictingExperiences: Experience[];
   confidenceScore: number;
-  status: 'hypothesis' | 'verified' | 'disproved';
+  sourceKnowledgeId?: string | null;
   tags: string[];
   createdAt: string;
+};
+
+export type KnowledgeProposal = {
+  _id: string;
+  field: string;
+  content: string;
+  confidenceScore: number;
+  supportingExperienceIds: string[];
+  sourceKnowledgeId: string | null;
+  detectedAt: string;
 };
 
 export type Plan = {

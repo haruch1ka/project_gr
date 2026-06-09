@@ -13,20 +13,9 @@ import { searchByQuery, extractFromUrl, isYouTubeUrl, TavilyResult } from '../se
 import { generateHypotheses, findRelatedKnowledge, HypothesisCandidate } from '../services/gemini';
 import { knowledgeApi } from '../services/api';
 import { Knowledge } from '../types';
+import { knowledgeColor, knowledgeLabel } from '../utils/knowledge';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Hypothesis'>;
-
-const STATUS_COLOR: Record<Knowledge['status'], string> = {
-  verified:   colors.primary,
-  hypothesis: colors.textSecondary,
-  disproved:  colors.danger,
-};
-
-const STATUS_LABEL: Record<Knowledge['status'], string> = {
-  verified:   '検証済',
-  hypothesis: '仮説',
-  disproved:  '反証',
-};
 
 export default function HypothesisScreen({ navigation, route }: Props) {
   const { field } = route.params;
@@ -113,7 +102,7 @@ export default function HypothesisScreen({ navigation, route }: Props) {
             supportingExperiences:    [],
             contradictingExperiences: [],
             confidenceScore:          0.2,
-            status:                   'hypothesis',
+            type:                     'hypothesis',
             tags:                     [],
           });
         })
@@ -226,7 +215,7 @@ export default function HypothesisScreen({ navigation, route }: Props) {
                     </View>
                   </View>
                   {relatedKnowledge.map((k, i) => {
-                    const color = STATUS_COLOR[k.status];
+                    const color = knowledgeColor(k);
                     const pct   = Math.round(k.confidenceScore * 100);
                     return (
                       <View key={k._id ?? i} style={styles.relatedCard}>
@@ -236,7 +225,7 @@ export default function HypothesisScreen({ navigation, route }: Props) {
                           <View style={styles.relatedMeta}>
                             <Text style={styles.relatedCategory}>{k.category}</Text>
                             <View style={[styles.statusTag, { borderColor: color }]}>
-                              <Text style={[styles.statusTagText, { color }]}>{STATUS_LABEL[k.status]}</Text>
+                              <Text style={[styles.statusTagText, { color }]}>{knowledgeLabel(k)}</Text>
                             </View>
                             <Text style={[styles.relatedPct, { color }]}>{pct}%</Text>
                           </View>
