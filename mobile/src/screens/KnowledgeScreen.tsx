@@ -469,7 +469,7 @@ export default function KnowledgeScreen() {
             activeOpacity={0.8}
           >
             <LightBulbIcon size={16} color="#000" strokeWidth={2} />
-            <Text style={styles.hypothesisBtnText}>気になることから仮説を生成</Text>
+            <Text style={styles.hypothesisBtnText}>気になることを投稿</Text>
           </TouchableOpacity>
 
           {allKnowledge.length > 0 && (

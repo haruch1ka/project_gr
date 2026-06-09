@@ -135,34 +135,74 @@ export default function HypothesisScreen({ navigation, route }: Props) {
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-          <View style={{ flex: 1 }}>
-            {/* ヘッダー */}
-            <View style={styles.header}>
-              <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-                <ArrowLeftIcon size={22} color={colors.text} strokeWidth={2} />
-              </TouchableOpacity>
-              <Text style={styles.headerTitle}>仮説を生成</Text>
-              <View style={{ width: 36 }} />
-            </View>
+        {/* ヘッダー */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+            <ArrowLeftIcon size={22} color={colors.text} strokeWidth={2} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>気になることを投稿</Text>
+          <View style={{ width: 36 }} />
+        </View>
 
-            <ScrollView
-              contentContainerStyle={styles.scroll}
-              keyboardShouldPersistTaps="handled"
-            >
-              {/* 入力 */}
-              <Text style={styles.label}>気になること・URL・YouTube</Text>
-              <View style={styles.inputRow}>
-                <TextInput
-                  style={styles.input}
-                  placeholder="例：朝マズメのルアー選び、https://..."
-                  placeholderTextColor={colors.textMuted}
-                  value={query}
-                  onChangeText={setQuery}
-                  multiline
-                  autoFocus
-                />
-              </View>
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* 入力 */}
+          <Text style={styles.label}>気になっていること</Text>
+          <View style={styles.inputRow}>
+            <TextInput
+              style={styles.input}
+              placeholder="例：朝マズメのルアー選び、https://..."
+              placeholderTextColor={colors.textMuted}
+              value={query}
+              onChangeText={setQuery}
+              multiline
+              autoFocus
+            />
+          </View>
+
+          <TouchableOpacity
+            style={[styles.generateBtn, !canGenerate && styles.btnDisabled]}
+            onPress={generate}
+            disabled={!canGenerate}
+            activeOpacity={0.8}
+          >
+            {loading
+              ? <ActivityIndicator color="#000" size="small" />
+              : <Text style={styles.generateBtnText}>投稿する</Text>
+            }
+          </TouchableOpacity>
+
+          {/* 仮説候補リスト */}
+          {candidates.length > 0 && (
+            <>
+              <Text style={styles.resultsLabel}>
+                関連する知識候補 — 保存するものを選択
+              </Text>
+              {candidates.map((c, i) => {
+                const isSelected = selected.has(i);
+                return (
+                  <TouchableOpacity
+                    key={i}
+                    style={[styles.candidateCard, isSelected && styles.candidateCardSelected]}
+                    onPress={() => toggleSelect(i)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.candidateRow}>
+                      <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+                        {isSelected && <CheckIcon size={12} color="#000" strokeWidth={3} />}
+                      </View>
+                      <View style={{ flex: 1, gap: 4 }}>
+                        <Text style={[styles.candidateContent, isSelected && styles.candidateContentSelected]}>
+                          {c.content}
+                        </Text>
+                        <Text style={styles.candidateCategory}>{c.category}</Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
 
               <TouchableOpacity
                 style={[styles.generateBtn, !canGenerate && styles.btnDisabled]}

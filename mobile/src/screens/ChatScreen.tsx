@@ -2,8 +2,9 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  FlatList, KeyboardAvoidingView, Platform, ActivityIndicator,
+  FlatList, KeyboardAvoidingView, Platform, ActivityIndicator, Alert,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
@@ -12,6 +13,8 @@ import { colors, font, radius } from '../constants/theme';
 import { ChatMessage, Knowledge, Experience } from '../types';
 import { chatWithHistory, extractKnowledgeFromChat, generateOpeningQuestion } from '../services/gemini';
 import { knowledgeApi, experienceApi, planApi } from '../services/api';
+
+function storageKey(field: string) { return `chat_history:${field}`; }
 
 type ChatNav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -59,32 +62,50 @@ export default function ChatScreen() {
   const [actionLoading,  setActionLoading]  = useState<string | null>(null);
   const listRef = useRef<FlatList>(null);
 
-  // コンテキスト取得 → 開口質問生成
+  // コンテキスト取得 → 履歴復元 or 開口質問生成
   const fetchContext = useCallback(async (field: string) => {
     setContextLoading(true);
-    setMessages([]);
     setShowActions(false);
     try {
-      const [k, e] = await Promise.all([
+      const [k, e, stored] = await Promise.all([
         knowledgeApi.list({ field }),
         experienceApi.list(field),
+        AsyncStorage.getItem(storageKey(field)),
       ]);
       setKnowledge(k);
       setExperiences(e);
 
-      const summary = {
-        verified:   k.filter(x => x.status === 'verified').length,
-        hypothesis: k.filter(x => x.status === 'hypothesis').length,
-        disproved:  k.filter(x => x.status === 'disproved').length,
-      };
-      const opening = await generateOpeningQuestion(field, e, summary);
-      setMessages([{ role: 'assistant', text: opening }]);
+      if (stored) {
+        const saved: ChatMessage[] = JSON.parse(stored);
+        setMessages(saved);
+        if (saved.length >= ACTION_THRESHOLD) setShowActions(true);
+      } else {
+        const summary = {
+          verified:   k.filter(x => x.status === 'verified').length,
+          hypothesis: k.filter(x => x.status === 'hypothesis').length,
+          disproved:  k.filter(x => x.status === 'disproved').length,
+        };
+        const opening = await generateOpeningQuestion(field, e, summary);
+        const initial = [{ role: 'assistant' as const, text: opening }];
+        setMessages(initial);
+        await AsyncStorage.setItem(storageKey(field), JSON.stringify(initial));
+      }
     } catch {
       setMessages([{ role: 'assistant', text: `${field}について、最近の経験や疑問を話してください。一緒に整理しましょう。` }]);
     } finally {
       setContextLoading(false);
     }
   }, []);
+
+  async function resetHistory() {
+    Alert.alert('会話をリセット', 'この分野の会話履歴を削除しますか？', [
+      { text: 'キャンセル', style: 'cancel' },
+      { text: '削除', style: 'destructive', onPress: async () => {
+        await AsyncStorage.removeItem(storageKey(activeField));
+        fetchContext(activeField);
+      }},
+    ]);
+  }
 
   useEffect(() => { fetchContext(activeField); }, [activeField, fetchContext]);
 
@@ -103,15 +124,26 @@ export default function ChatScreen() {
       const reply = await chatWithHistory(newMessages.slice(-8), systemPrompt);
       const updated: ChatMessage[] = [...newMessages, { role: 'assistant', text: reply }];
       setMessages(updated);
+      await AsyncStorage.setItem(storageKey(activeField), JSON.stringify(updated));
       if (updated.length >= ACTION_THRESHOLD) setShowActions(true);
     } catch (e) {
       const err = e as Error;
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        text: err.message.includes('未設定')
-          ? 'Gemini APIキーが設定されていません。'
-          : '送信に失敗しました。しばらく待ってから再試行してください。',
-      }]);
+      const status = Number(err.message.match(/\[(\d+)\]/)?.[1] ?? 0);
+      let text: string;
+      if (err.message.includes('未設定')) {
+        text = 'APIキーが未設定です。Vercelの環境変数を確認してください。';
+      } else if (status === 429) {
+        text = 'リクエスト数の上限に達しました（429）。1分ほど待ってから再試行してください。';
+      } else if (status >= 500) {
+        text = `サーバーエラーが発生しました（${status}）。しばらく待ってから再試行してください。`;
+      } else if (status === 401 || status === 403) {
+        text = `APIキーが無効または権限がありません（${status}）。`;
+      } else if (status === 0) {
+        text = 'ネットワークに接続できません。Wi-Fiまたはモバイル通信を確認してください。';
+      } else {
+        text = `送信に失敗しました（${err.message}）。`;
+      }
+      setMessages(prev => [...prev, { role: 'assistant', text }]);
     } finally {
       setLoading(false);
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
@@ -170,7 +202,12 @@ export default function ChatScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
-        <Text style={styles.screenTitle}>対話</Text>
+        <View style={styles.titleRow}>
+          <Text style={styles.screenTitle}>対話</Text>
+          <TouchableOpacity onPress={resetHistory} style={styles.resetBtn}>
+            <Text style={styles.resetBtnText}>リセット</Text>
+          </TouchableOpacity>
+        </View>
         {/* メッセージリスト */}
         <FlatList
           ref={listRef}
@@ -255,7 +292,10 @@ export default function ChatScreen() {
 
 const styles = StyleSheet.create({
   container:   { flex: 1, backgroundColor: colors.bg },
-  screenTitle: { fontSize: font.xl, fontWeight: '700', color: colors.text, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 },
+  titleRow:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 },
+  screenTitle: { fontSize: font.xl, fontWeight: '700', color: colors.text },
+  resetBtn:    { paddingHorizontal: 12, paddingVertical: 4, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border },
+  resetBtnText: { fontSize: font.xs, color: colors.textMuted },
 
   fieldSelect: { flex: 1, padding: 20, gap: 10, justifyContent: 'center' },
   fieldChip: {
