@@ -79,13 +79,13 @@ type EvidenceItem = {
   likelihood:  'high' | 'medium' | 'low';
 };
 
-const SCORE_DELTA: Record<EvidenceItem['relation'], Record<EvidenceItem['likelihood'], number>> = {
+export const SCORE_DELTA: Record<EvidenceItem['relation'], Record<EvidenceItem['likelihood'], number>> = {
   supporting:    { high: 0.12, medium: 0.06, low: 0.02 },
   contradicting: { high: -0.12, medium: -0.06, low: -0.02 },
   neutral:       { high: 0, medium: 0, low: 0 },
 };
 
-function toStatus(score: number): Knowledge['status'] {
+export function toStatus(score: number): Knowledge['status'] {
   if (score >= 0.8) return 'verified';
   if (score <= 0.2) return 'disproved';
   return 'hypothesis';
