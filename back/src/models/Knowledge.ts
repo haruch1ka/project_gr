@@ -8,7 +8,7 @@ const knowledgeSchema = new Schema({
   webSources:               { type: Array, default: [] },
   supportingExperiences:    { type: Array, default: [] },
   contradictingExperiences: { type: Array, default: [] },
-  confidenceScore: { type: Number, default: 0.2, min: 0, max: 1 },
+  confidenceScore: { type: Number, default: 0.05, min: 0, max: 1 },
   status: {
     type: String,
     enum: ['hypothesis', 'verified', 'disproved'],

@@ -299,6 +299,8 @@ export default function HypothesisScreen({ navigation, route }: Props) {
                   </TouchableOpacity>
                 </>
               )}
+            </>
+          )}
             </ScrollView>
           </View>
         </TouchableWithoutFeedback>

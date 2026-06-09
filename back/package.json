@@ -6,7 +6,8 @@
     "dev": "nodemon --exec ts-node src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "test": "jest"
+    "test": "jest",
+    "chat": "ts-node --transpile-only scripts/chat-cli.ts"
   },
   "dependencies": {
     "cors": "^2.8.5",
