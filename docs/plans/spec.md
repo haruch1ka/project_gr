@@ -2,6 +2,15 @@
 
 ## データモデル
 
+### Field（分野）
+
+```typescript
+{
+  name: string,   // ユーザーが自由定義
+  icon: string,   // 絵文字アイコン
+}
+```
+
 ### Experience（経験ログ）
 
 ```typescript
@@ -13,12 +22,26 @@
 }
 ```
 
+### KnowledgeFolder（知識フォルダ）
+
+```typescript
+{
+  field: string,
+  title: string,
+  parentId: string | null,  // ネスト構造（現状は1階層のみ使用）
+  order: number,
+  createdAt: Date,
+}
+```
+
 ### Knowledge（統合知識）
 
 ```typescript
 {
   field: string,
   category: string,                              // ユーザー定義のカテゴリ
+  subcategory: string,                           // サブカテゴリ（省略可）
+  folderId: string | null,                       // 所属フォルダ（省略可）
   content: string,
   webSources: ResearchResult[],                  // 元になったWeb情報
   supportingExperiences: Experience[],           // 裏付けた経験
@@ -26,6 +49,7 @@
   confidenceScore: number,                       // ベイズ的に更新
   status: 'hypothesis' | 'verified' | 'disproved',  // 閾値設計は未決定
   tags: string[],
+  createdAt: Date,
 }
 ```
 

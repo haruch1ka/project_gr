@@ -15,7 +15,7 @@
 | Backend | Node.js + Express + TypeScript（Vercel） |
 | DB | MongoDB Atlas M0（無料固定） |
 | AI | Google Gemini API（gemini-2.0-flash）|
-| Web検索 | 未定 |
+| Web検索 | Tavily API（確定・クレカ不要・月1000クレジット無料） |
 
 ---
 
@@ -24,7 +24,8 @@
 | 対象 | 呼び出し元 | APIキー管理 |
 |------|-----------|------------|
 | MongoDB | back/（Vercel） | 環境変数 |
-| Gemini | mobile（直叩き） | SecureStore |
+| Gemini | mobile → back/（Vercel） | 環境変数 |
+| Tavily | mobile → back/（Vercel） | 環境変数 |
 
 ---
 
@@ -37,20 +38,27 @@ project_gr/
 │       ├── models/
 │       │   ├── Experience.ts
 │       │   ├── Knowledge.ts
+│       │   ├── KnowledgeFolder.ts
 │       │   ├── Plan.ts
+│       │   ├── Field.ts
 │       │   └── ResearchResult.ts
 │       ├── router/
 │       │   ├── experience.ts
 │       │   ├── knowledge.ts
-│       │   └── plan.ts
+│       │   ├── knowledgeFolders.ts
+│       │   ├── plan.ts
+│       │   ├── field.ts
+│       │   ├── gemini.ts              # Gemini APIプロキシ（APIキーをバックエンドで管理）
+│       │   └── tavily.ts              # Tavily APIプロキシ（search / extract）
+│       ├── app.ts
 │       └── server.ts
 └── mobile/
     └── src/
         ├── screens/
         │   ├── DashboardScreen.tsx    # ホームタブ（分野タブ・知識ウィジェット・アンケート）
         │   ├── KnowledgeScreen.tsx    # 知識一覧（カテゴリ別）
-        │   ├── KnowledgeCategoryScreen.tsx
         │   ├── KnowledgeItemScreen.tsx
+        │   ├── HypothesisScreen.tsx   # 気になること投稿 → 仮説生成・保存
         │   ├── ChatScreen.tsx         # Gemini対話
         │   ├── PlanScreen.tsx         # 行動プラン管理
         │   ├── LogScreen.tsx          # 経験ログ一覧
@@ -61,8 +69,11 @@ project_gr/
         ├── context/
         │   └── FieldContext.tsx       # 分野状態（activeField・fields・追加削除）
         ├── services/
-        │   ├── api.ts                 # バックエンドAPI呼び出し（experience / knowledge / plan）
-        │   └── gemini.ts              # Gemini API ラッパー
+        │   ├── api.ts                 # バックエンドAPI呼び出し（experience / knowledge / knowledge-folders / plan / field）
+        │   ├── gemini.ts              # Gemini APIラッパー（バックエンド経由）
+        │   └── tavily.ts              # Tavily APIラッパー（バックエンド経由）
+        ├── utils/
+        │   └── chat.ts                # チャット履歴管理ユーティリティ
         ├── constants/
         │   ├── theme.ts               # colors / font / radius
         │   └── mockData.ts            # 開発用モックデータ
@@ -102,8 +113,15 @@ RootStack（NativeStack）
 | `/experiences/:id` | DELETE | 削除 |
 | `/knowledge` | GET / POST | 知識一覧・作成 |
 | `/knowledge/:id` | GET / PATCH / DELETE | 取得・更新・削除 |
+| `/knowledge-folders` | GET / POST | フォルダ一覧・作成 |
+| `/knowledge-folders/:id` | PATCH / DELETE | 更新・削除 |
 | `/plans` | GET / POST | プラン一覧・作成 |
 | `/plans/:id` | PATCH / DELETE | 更新・削除 |
+| `/fields` | GET / POST | 分野一覧・作成 |
+| `/fields/:id` | DELETE | 削除 |
+| `/gemini/generate` | POST | Gemini API プロキシ |
+| `/tavily/search` | POST | Tavily キーワード検索プロキシ |
+| `/tavily/extract` | POST | Tavily URL抽出プロキシ |
 
 ホスト: `https://project-gr-back.vercel.app`
 
@@ -113,7 +131,6 @@ RootStack（NativeStack）
 
 - 可視化の具体的な手法
 - ResearchResult の router 未実装（モデルのみ存在）
-- 分野データの永続化（現状は FieldContext のインメモリ状態のみ）
 
 ---
 

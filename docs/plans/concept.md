@@ -153,7 +153,7 @@ confidenceScoreは「この知識が一般的に正しいか」ではなく、**
 定期ログでは拾えない無意識の傾向・感情・気づきを収集し、Meta-Knowledge抽出の素材にする。
 
 ### 設計
-- **方式**：固定の「問いの型（約10問）」を骨格に、Claudeが文脈を挿入して動的生成
+- **方式**：固定の「問いの型（約10問）」を骨格に、Geminiが文脈を挿入して動的生成
 - **周期**：バンドを設けたランダム（最短3日・最長14日）
 - **形式**：選択肢メイン、10秒以内で完了
 
@@ -205,7 +205,7 @@ confidenceScoreは「この知識が一般的に正しいか」ではなく、**
 - Mobile: React Native（Expo）
 - DB: MongoDB Atlas M0（無料固定）
 - AI: Google Gemini API（gemini-2.0-flash）
-- Web検索: 未定
+- Web検索: Tavily API（確定）
 
 詳細は [architecture.md](./architecture.md) を参照。
 
