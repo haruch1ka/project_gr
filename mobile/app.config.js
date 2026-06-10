@@ -1,5 +1,7 @@
 const withRootBuildGradle = require('./plugins/withRootBuildGradle');
 const withMainApplication = require('./plugins/withMainApplication');
+const withGradleWrapper = require('./plugins/withGradleWrapper');
+const withGradleProperties = require('./plugins/withGradleProperties');
 
 /** @type {import('@expo/config').ExpoConfig} */
 const config = {
@@ -29,6 +31,8 @@ const config = {
     "expo-secure-store",
     "./plugins/withRootBuildGradle",
     "./plugins/withMainApplication",
+    "./plugins/withGradleWrapper",
+    "./plugins/withGradleProperties",
   ],
 };
 
