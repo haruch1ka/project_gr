@@ -24,13 +24,13 @@ export default function WebScreen({ navigation, route }: Props) {
           <TouchableOpacity>
             <Text style={[styles.actionIcon, styles.actionIconActive]}>🔍</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => navigation.navigate('Chat', { field })}>
+          <TouchableOpacity onPress={() => navigation.navigate('FieldTabs', { screen: 'Chat' })}>
             <Text style={styles.actionIcon}>💬</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => navigation.navigate('Knowledge', { field })}>
+          <TouchableOpacity onPress={() => navigation.navigate('FieldTabs', { screen: 'Knowledge' })}>
             <Text style={styles.actionIcon}>📚</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => navigation.navigate('Plan', { field })}>
+          <TouchableOpacity onPress={() => navigation.navigate('Plan')}>
             <Text style={styles.actionIcon}>📋</Text>
           </TouchableOpacity>
         </View>

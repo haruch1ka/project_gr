@@ -21,5 +21,10 @@
     "**/pnpm-lock.yaml": true
   },
   "git.ignoreLimitWarning": true,
-  "git.decorations.enabled": true
+  "git.decorations.enabled": true,
+  "java.import.gradle.enabled": false,
+  "java.import.exclusions": [
+    "**/mobile/android/**",
+    "**/node_modules/**"
+  ]
 }

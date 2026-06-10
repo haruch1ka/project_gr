@@ -5,9 +5,10 @@ import {
   ScrollView, ActivityIndicator, RefreshControl, Alert,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, CompositeNavigationProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../../App';
+import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import { RootStackParamList, FieldTabParamList } from '../../App';
 import { useField } from '../context/FieldContext';
 import { colors, font, radius } from '../constants/theme';
 import { Cog6ToothIcon } from 'react-native-heroicons/outline';
@@ -15,7 +16,10 @@ import { knowledgeApi, planApi, proposalApi } from '../services/api';
 import { Knowledge, KnowledgeProposal, Plan } from '../types';
 import { knowledgeColor, knowledgeLabel } from '../utils/knowledge';
 
-type Nav = NativeStackNavigationProp<RootStackParamList>;
+type Nav = CompositeNavigationProp<
+  BottomTabNavigationProp<FieldTabParamList>,
+  NativeStackNavigationProp<RootStackParamList>
+>;
 
 const PROPOSAL_CACHE_KEY = (field: string) => `proposal_cache_${field}`;
 

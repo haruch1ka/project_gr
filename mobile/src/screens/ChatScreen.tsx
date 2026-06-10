@@ -8,7 +8,7 @@ import { RootStackParamList } from "../../App";
 import { useField } from "../context/FieldContext";
 import { colors, font, radius } from "../constants/theme";
 import { ChatMessage, Knowledge, Experience } from "../types";
-import { chatWithHistory, extractKnowledgeFromChat, generateOpeningQuestion } from "../services/gemini";
+import { chat, chatWithHistory, extractKnowledgeFromChat, generateOpeningQuestion } from "../services/gemini";
 import { knowledgeApi, experienceApi, planApi } from "../services/api";
 import { storageKey, buildSystemPrompt } from "../utils/chat";
 
