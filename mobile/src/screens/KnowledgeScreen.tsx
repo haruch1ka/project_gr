@@ -56,14 +56,28 @@ function StatusSummary({ items }: { items: Knowledge[] }) {
   );
 }
 
+// ─── フィルター候補の単語分割 ─────────────────────────────────────────────
+
+function splitToWords(phrase: string): string[] {
+  const byDelimiter = phrase.split(/[とや・､、,\/／\s　]+/);
+  const result: string[] = [];
+  for (const part of byDelimiter) {
+    if (!part) continue;
+    // 文字種（漢字／カタカナ／ひらがな／英数字）の境界で分割
+    const segments = part.match(
+      /[一-鿿㐀-䶿豈-﫿]+|[゠-ヿ]+|[぀-ゟ]+|[a-zA-ZａｚＡＺ0-9０-９]+/g,
+    );
+    result.push(...(segments ?? [part]));
+  }
+  return [...new Set(result)].filter(w => w.length > 0);
+}
+
 // ─── ファセットバー ────────────────────────────────────────────────────────
 
 type FacetBarProps = {
   filterCategories: Set<string>;
   filterTags:       Set<string>;
   filterCustom:     Set<string>;
-  categories:       string[];
-  tags:             string[];
   customFilters:    string[];
   onToggleCategory: (c: string) => void;
   onToggleTag:      (t: string) => void;
@@ -108,19 +122,15 @@ function CustomChip({ label, active, onToggle, onRemove }: {
   );
 }
 
-function InactiveChip({ label, onPress }: { label: string; onPress: () => void }) {
-  return (
-    <TouchableOpacity style={styles.chip} onPress={onPress} activeOpacity={0.7}>
-      <Text style={styles.chipText}>{label}</Text>
-    </TouchableOpacity>
-  );
-}
 
 function FacetBar({
   filterCategories, filterTags, filterCustom,
-  categories, tags, customFilters,
+  customFilters,
   onToggleCategory, onToggleTag, onToggleCustom, onRemoveCustom, onAddFilter,
 }: FacetBarProps) {
+  const activeCategories = [...filterCategories];
+  const activeTags       = [...filterTags];
+
   return (
     <ScrollView
       horizontal
@@ -128,42 +138,23 @@ function FacetBar({
       style={styles.facetBar}
       contentContainerStyle={styles.facetBarContent}
     >
-      {categories.length > 0 && (
-        <>
-          <View style={styles.chipDivider} />
-          {categories.map(cat =>
-            filterCategories.has(cat)
-              ? <ActiveChip   key={cat} label={cat} color={colors.blue} onPress={() => onToggleCategory(cat)} />
-              : <InactiveChip key={cat} label={cat}                     onPress={() => onToggleCategory(cat)} />
-          )}
-        </>
-      )}
+      {activeCategories.map(cat => (
+        <ActiveChip key={cat} label={cat} color={colors.blue} onPress={() => onToggleCategory(cat)} />
+      ))}
 
-      {tags.length > 0 && (
-        <>
-          <View style={styles.chipDivider} />
-          {tags.map(tag =>
-            filterTags.has(tag)
-              ? <ActiveChip   key={tag} label={`#${tag}`} color={colors.blue} onPress={() => onToggleTag(tag)} />
-              : <InactiveChip key={tag} label={`#${tag}`}                     onPress={() => onToggleTag(tag)} />
-          )}
-        </>
-      )}
+      {activeTags.map(tag => (
+        <ActiveChip key={tag} label={`#${tag}`} color={colors.blue} onPress={() => onToggleTag(tag)} />
+      ))}
 
-      {customFilters.length > 0 && (
-        <>
-          {(categories.length > 0 || tags.length > 0) && <View style={styles.chipDivider} />}
-          {customFilters.map(w => (
-            <CustomChip
-              key={w}
-              label={w}
-              active={filterCustom.has(w)}
-              onToggle={() => onToggleCustom(w)}
-              onRemove={() => onRemoveCustom(w)}
-            />
-          ))}
-        </>
-      )}
+      {customFilters.map(w => (
+        <CustomChip
+          key={w}
+          label={w}
+          active={filterCustom.has(w)}
+          onToggle={() => onToggleCustom(w)}
+          onRemove={() => onRemoveCustom(w)}
+        />
+      ))}
 
       <TouchableOpacity style={styles.chipAdd} onPress={onAddFilter} activeOpacity={0.7}>
         <Text style={styles.chipAddPlus}>＋</Text>
@@ -422,6 +413,17 @@ export default function KnowledgeScreen() {
       .sort(),
     [allKnowledge],
   );
+
+  const filterSuggestions = useMemo(() => {
+    const lw = addFilterText.trim().toLowerCase();
+    const raw = [
+      ...uniqueCategories.filter(c => !filterCategories.has(c)),
+      ...uniqueTags.filter(t => !filterTags.has(t)),
+    ];
+    const pool = [...new Set(raw.flatMap(splitToWords))];
+    if (!lw) return pool.slice(0, 12);
+    return pool.filter(w => w.toLowerCase().includes(lw));
+  }, [addFilterText, uniqueCategories, uniqueTags, filterCategories, filterTags]);
   const filteredKnowledge = useMemo(() => {
     if (!facetActive) return allKnowledge;
     return allKnowledge.filter(k => {
@@ -530,6 +532,21 @@ export default function KnowledgeScreen() {
     const word = addFilterText.trim();
     if (!word || word.includes(' ') || customFilters.includes(word)) return;
     setCustomFilters(prev => [...prev, word]);
+    setFilterCustom(prev => { const n = new Set(prev); n.add(word); return n; });
+    setAddFilterText('');
+    setAddFilterVisible(false);
+  }
+
+  function selectSuggestion(word: string) {
+    if (uniqueCategories.includes(word)) {
+      toggleCategory(word);
+    } else if (uniqueTags.includes(word)) {
+      toggleTag(word);
+    } else {
+      if (customFilters.includes(word)) return;
+      setCustomFilters(prev => [...prev, word]);
+      setFilterCustom(prev => { const n = new Set(prev); n.add(word); return n; });
+    }
     setAddFilterText('');
     setAddFilterVisible(false);
   }
@@ -625,8 +642,6 @@ export default function KnowledgeScreen() {
         filterCategories={filterCategories}
         filterTags={filterTags}
         filterCustom={filterCustom}
-        categories={uniqueCategories}
-        tags={uniqueTags}
         customFilters={customFilters}
         onToggleCategory={toggleCategory}
         onToggleTag={toggleTag}
@@ -723,6 +738,24 @@ export default function KnowledgeScreen() {
               onSubmitEditing={confirmAddFilter}
               autoCapitalize="none"
             />
+            {filterSuggestions.length > 0 && (
+              <ScrollView
+                style={styles.suggestionList}
+                keyboardShouldPersistTaps="handled"
+                nestedScrollEnabled
+              >
+                {filterSuggestions.map(w => (
+                  <TouchableOpacity
+                    key={w}
+                    style={styles.suggestionItem}
+                    onPress={() => selectSuggestion(w)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.suggestionText}>{w}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
             <View style={styles.modalBtns}>
               <TouchableOpacity
                 style={styles.modalBtnCancel}
@@ -856,4 +889,8 @@ const styles = StyleSheet.create({
   modalBtnCancelText:  { color: colors.textSub, fontSize: font.sm },
   modalBtnConfirm:     { flex: 1, padding: 10, borderRadius: radius.sm, backgroundColor: colors.blue, alignItems: 'center' as const },
   modalBtnConfirmText: { color: '#fff', fontSize: font.sm, fontWeight: '600' as const },
+
+  suggestionList: { maxHeight: 150, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.borderInput, backgroundColor: colors.bgDeep },
+  suggestionItem: { paddingVertical: 9, paddingHorizontal: 10, borderBottomWidth: 1, borderBottomColor: colors.border },
+  suggestionText: { fontSize: font.sm, color: colors.text },
 });

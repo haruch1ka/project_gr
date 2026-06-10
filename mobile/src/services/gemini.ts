@@ -13,13 +13,18 @@ export class GeminiRateLimitError extends Error {
 // 429時は60秒待ってリセットを待つ。最大10回試行（＝最大約10分）
 const RATE_LIMIT_WAIT_MS = 60000;
 const MAX_RATE_LIMIT_RETRIES = 10;
+// 503時は10秒待ってリトライ。最大5回
+const SERVICE_UNAVAILABLE_WAIT_MS = 10000;
+const MAX_SERVICE_UNAVAILABLE_RETRIES = 5;
 
 async function callGemini(
   messages: GeminiMessage[],
   systemInstruction?: string,
   jsonMode = false,
 ): Promise<string> {
-  for (let rateLimitCount = 0; ; rateLimitCount++) {
+  let rateLimitCount = 0;
+  let serviceUnavailableCount = 0;
+  for (;;) {
     const res = await fetch(`${BACK_URL}/gemini/generate`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -30,10 +35,16 @@ async function callGemini(
       return data.text ?? '';
     }
     if (res.status === 429 && rateLimitCount < MAX_RATE_LIMIT_RETRIES) {
+      rateLimitCount++;
       await new Promise(r => setTimeout(r, RATE_LIMIT_WAIT_MS));
       continue;
     }
     if (res.status === 429) throw new GeminiRateLimitError();
+    if (res.status === 503 && serviceUnavailableCount < MAX_SERVICE_UNAVAILABLE_RETRIES) {
+      serviceUnavailableCount++;
+      await new Promise(r => setTimeout(r, SERVICE_UNAVAILABLE_WAIT_MS));
+      continue;
+    }
     throw new Error(`Gemini error: ${res.status}`);
   }
 }
@@ -156,10 +167,14 @@ export async function generateHypotheses(
   youtubeUrl?:        string,
   existingCategories: string[] = [],
 ): Promise<HypothesisCandidate[]> {
-  const jsonSchema = `{"groupCategory":"<全仮説をまとめる共通カテゴリ（15文字以内）>","hypotheses":[{"content":"<仮説>","subcategory":"<細分類（10文字以内）、不要なら空文字>"}]}`;
+  const jsonSchema = `{"groupCategory":"<全仮説をまとめる共通カテゴリ（1単語）>","hypotheses":[{"content":"<仮説>","subcategory":"<細分類（1単語）、不要なら空文字>"}]}`;
+
+  const categoryRules = `カテゴリのルール：
+- 分類名は必ず1単語にする（日本語・英語どちらも可）
+- 既存カテゴリと同じ意味の場合は既存のものをそのまま使い、重複した分類名を絶対に作らない`;
 
   const categoryHint = existingCategories.length > 0
-    ? `\n既存カテゴリ一覧：[${existingCategories.map(c => `"${c}"`).join(', ')}]\n類似するカテゴリがあれば既存のものをそのまま使い、なければ新たに命名してください。\n`
+    ? `\n既存カテゴリ一覧：[${existingCategories.map(c => `"${c}"`).join(', ')}]\n`
     : '';
 
   const prompt = youtubeUrl
@@ -167,12 +182,16 @@ export async function generateHypotheses(
 気になっていること：「${query}」
 YouTube動画URL：${youtubeUrl}
 ${categoryHint}
+${categoryRules}
+
 上記の動画を踏まえ、この分野で実践・検証できる仮説を3〜5件生成してください。
 また、これら仮説全体をまとめる共通カテゴリ名も返してください。
 JSON形式で返してください：${jsonSchema}`
     : `分野：${field}
 気になっていること：「${query}」
 ${categoryHint}
+${categoryRules}
+
 以下のWeb情報を参考に、実践・検証できる仮説を3〜5件生成してください。
 また、これら仮説全体をまとめる共通カテゴリ名も返してください。
 
@@ -249,7 +268,7 @@ export async function extractKnowledgeFromChat(
 対話：
 ${conversationText}
 
-JSON形式で返してください：{"content":"<知識を1文で>","category":"<カテゴリ（10文字以内）>"}`;
+JSON形式で返してください：{"content":"<知識を1文で>","category":"<カテゴリ（1単語）>"}`;
 
   return chatJSON<ExtractedKnowledge>(prompt);
 }
