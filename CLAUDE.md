@@ -22,7 +22,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | Hosting | Vercel（無料枠、スリープなし） |
 | Mobile | React Native（Expo） |
 | DB | MongoDB Atlas M0（無料固定） |
-| AI | Google Gemini API（gemini-2.0-flash） |
+| AI | Google Gemini API（gemini-2.5-flash） |
 | Web検索 | Tavily API（確定・クレカ不要・月1000クレジット無料） |
 
 **制約：無料かつクレジットカード登録不要のサービスのみ使用すること。**

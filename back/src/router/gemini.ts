@@ -2,7 +2,7 @@ import { Router } from 'express';
 
 const router = Router();
 
-const MODEL   = 'gemini-flash-latest';
+const MODEL   = 'gemini-2.5-flash';
 const BASE_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}`;
 
 router.post('/generate', async (req, res) => {
