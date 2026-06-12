@@ -8,7 +8,6 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
 import { colors, font, radius } from '../constants/theme';
 import { experienceApi } from '../services/api';
-import { updateKnowledgeFromExperience } from '../services/gemini';
 import {
   XMarkIcon, ChevronDownIcon, PaperAirplaneIcon, CheckIcon,
 } from 'react-native-heroicons/outline';
@@ -42,7 +41,6 @@ export default function QuickLogScreen({ navigation, route }: Props) {
     const date = `${today.getMonth() + 1}/${today.getDate()}`;
     try {
       await experienceApi.create({ field: selectedField, date, memo: memo.trim() });
-      updateKnowledgeFromExperience(selectedField, memo.trim()).catch(console.error);
       navigation.goBack();
     } catch (e) {
       console.error(e);

@@ -117,7 +117,43 @@
 
 ---
 
-## 5. 設計判断（解決済み・未解決）
+## 5. 多変数の同時変化問題（Confounding Variables Problem）
+
+1回の経験ログには複数の条件が同時に含まれる（例：小潮 × 干潮 × 遠投 × 金色ワーム → 失敗）。どの変数が結果の原因かを帰属（attribution）できないという問題。
+
+### 手法の調査結果
+
+| 手法 | 適用可否 | 根拠 |
+|------|---------|------|
+| 因果推論（DoWhy・傾向スコア法等） | △ | 大量データが前提。N=40程度では doubly robust g-computation が最も安定するが、このアプリのログ量では適用困難 |
+| DAG（有向非巡回グラフ） | ○ | ドメイン知識を事前構造として組み込める。データ不足でも「あり得ない因果経路」の除外が可能 |
+| LLMによる因果グラフ推論 | ○ | 変数名のメタデータだけからLLMが因果グラフを推論できることが示されている（2024〜2025年の研究） |
+| 実験計画法（DoE・直交表） | △ | ユーザーへの強制はNG。AIが「次に試す条件」をサジェストする形なら適用可能 |
+| Contextual Bandit / 強化学習 | △ | ログ100件超から有効。コールドスタート問題があり初期は使えない |
+| Grounded Theory（定性的研究） | ○ | 少ないデータからボトムアップでパターンを抽出する手法。LLMとの相性が最も良い。LOGOSプロジェクト（2025）でLLM駆動の自動化が実現されている |
+
+### QuantifiedSelfドメインの知見
+
+MITの**QuantifyMe**（単一事例実験計画：SCED）の重要な知見：「ユーザーが目標変数の範囲内に実際に行動できた日だけを分析対象にする」という絞り込みが交絡を大幅に減らす。少ないログでも適用可能。
+
+### 小サンプルでの因果推論ベストプラクティス
+
+1. **事前知識をPriorとして制約に組み込む**：ドメイン知識（「小潮は一般的に釣りにくい」等）をDAGやベイズ事前分布として組み込めば、データが少なくても推論が安定する
+2. **ハード制約とソフト制約の使い分け**：「AがBに影響するのはあり得ない」を禁止エッジ（ハード）、「CがDに影響しやすい」を事前確率（ソフト）で表現
+3. **帰属の不確実性を正直に出力する**：サンプルが不足している段階では「帰属できない」を正直に出力することがベストプラクティス。断言することは科学的誠実さに反する
+
+### 参考文献
+
+- [Causal inference methods for small non-randomized studies - PMC](https://pmc.ncbi.nlm.nih.gov/articles/PMC7834813/)
+- [QuantifyMe: An Open-Source Automated Single-Case Experimental Design Platform - PMC](https://pmc.ncbi.nlm.nih.gov/articles/PMC5948910/)
+- [Efficient Causal Graph Discovery Using Large Language Models - arXiv](https://arxiv.org/pdf/2402.01207)
+- [Large Language Models are Effective Priors for Causal Graph Discovery - arXiv](https://arxiv.org/pdf/2405.13551)
+- [LOGOS: LLM-driven Grounded Theory Development - arXiv](https://arxiv.org/pdf/2509.24294)
+- [Incorporating Expert Knowledge into Bayesian Causal Discovery - arXiv](https://arxiv.org/pdf/2510.06735)
+
+---
+
+## 6. 設計判断（解決済み・未解決）
 
 - `verified` の廃止：`confidenceScore` の連続値のみで表現する（`status` フィールドは廃止済み）
 - 反証の重み：**非対称採用（解決済み）**。反証は支持より1.5倍重く扱う。尤度ごとの係数は下表。

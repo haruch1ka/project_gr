@@ -64,7 +64,7 @@ router.get('/', async (req, res) => {
     .sort({ createdAt: -1 })
     .limit(10);
 
-  // distilled検出用に全経験（最大15件）
+  // 仮説照合・パターン検出用に全経験（最大15件）
   const allExperiences = await Experience.find({ field })
     .sort({ createdAt: -1 })
     .limit(15);
@@ -74,30 +74,32 @@ router.get('/', async (req, res) => {
     ? hypotheses.map(h => `- ID:${h._id} 内容:「${h.content}」 確信度:${h.confidenceScore.toFixed(2)}`).join('\n')
     : '（なし）';
 
-  const unanalyzedText = unanalyzed
-    .map(e => `- ID:${e._id} 日付:${e.date} 内容:「${e.memo}」`)
-    .join('\n');
-
   const allExpText = allExperiences
     .map(e => `- ID:${e._id} 日付:${e.date} 内容:「${e.memo}」`)
     .join('\n');
 
-  const prompt = `あなたは経験ログを分析して知識の確信度を更新するAIです。分野は「${field}」です。
+  const prompt = `あなたは経験ログのパターンを検出するAIです。分野は「${field}」です。
 
-【タスク1：仮説の評価】
-「新しい経験」が既存の各「仮説」を支持(supporting)・反証(contradicting)・無関係(unrelated)のどれに当たるかと、尤度(high/medium/low)を判定してください。
+【タスク1：仮説とのパターン照合】
+すべての経験ログを通じて、各仮説に対して「2件以上の経験が同じ方向（支持または反証）を示しているか」を確認してください。
 
-【タスク2：パターン検出】
-「すべての経験」から、このユーザーに固有の傾向やパターンを検出してください。
-明確で繰り返し見られるパターンが1つある場合のみdistilledProposalを返し、なければnullにしてください。
+制約（必ず守ること）：
+- Web上の一般知識・「なぜそうなるか」の推論は使用禁止
+- ログに実際に書かれた事実・結果のみを根拠にする
+- 2件未満しか根拠がない場合は direction を "unrelated" にする
+
+【タスク2：パターン検出（distilled候補）】
+すべての経験から、このユーザーに固有の傾向やパターンを1つだけ検出してください。
+
+制約（必ず守ること）：
+- Web上の一般知識・「なぜそうなるか」の推論は使用禁止
+- ログに2件以上現れた事実のみを根拠にする
+- 2件以上の根拠がない場合は null を返す
 
 --- 既存の仮説 ---
 ${hypothesesText}
 
---- 新しい経験（未分析）---
-${unanalyzedText}
-
---- すべての経験（パターン検出用）---
+--- すべての経験 ---
 ${allExpText}
 
 必ず以下のJSON形式のみで返してください：
@@ -110,7 +112,7 @@ ${allExpText}
     }
   ],
   "distilledProposal": {
-    "content": "パターンの説明（日本語・1〜2文）",
+    "content": "ログから見えたパターンの説明（日本語・1〜2文）",
     "confidenceScore": 0.0〜1.0の数値,
     "supportingExperienceIds": ["経験のID文字列", ...]
   } | null
