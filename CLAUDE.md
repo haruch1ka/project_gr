@@ -67,13 +67,6 @@ project_gr/
 
 `verified` は「証明済み」ではなく「現時点で反証されていない」を意味する（ポパーの反証主義）。
 
-### 知識の2層構造
-
-| レイヤー | 内容 | 適用範囲 |
-|----------|------|----------|
-| Instance Knowledge | 各分野で学んだこと | その分野に閉じる |
-| Meta Knowledge | 上達という行為自体の知識 | 全分野に適用・classを更新 |
-
 その他モデル：`Experience`（経験ログ）・`Plan`（行動プラン）・`ResearchResult`（Web収集生データ）。詳細は [`docs/plans/spec.md`](docs/plans/spec.md) を参照。
 
 ---
@@ -84,7 +77,7 @@ project_gr/
 - **confidenceScore の更新ロジック**：支持経験でスコアが上昇し、反証経験でスコアが下降する。反証は支持より1.5倍重く扱う（反証主義の設計原則）。Geminiが証拠の尤度（高・中・低）を判断してスコアに変換する。詳細は [`docs/research/knowledge-verification-theory.md`](docs/research/knowledge-verification-theory.md) 参照。
 - **経験ログとKnowledgeの紐付け**：ユーザーは「書くだけ」でよい。仮説を意識する必要はなく、Geminiが自動で関連Knowledgeに紐付ける。
 - **入力コスト設計**：軽量モード（経験ログ・アンケート）は摩擦ゼロが最優先。重量モード（Gemini対話）のみコストをかける。「一言入力 → Geminiが構造化 → ユーザーが確認タップ」がパターン。
-- **ランダムアンケート**：3〜14日のランダム周期でGeminiが動的生成。Meta-Knowledge抽出の素材にする。
+- **ランダムアンケート**：3〜14日のランダム周期。Geminiが経験ログ・知識の状態から盲点を逆算して一問（選択肢式）を動的生成。固定の問いの型は使わない。文脈が不足している場合は生成しない。
 - **Web収集の役割分担**：Tavilyが情報収集、Geminiが思考・統合を担う。YouTube URLはGeminiが直接処理（Tavilyなし）。
 
 ---

@@ -42,6 +42,7 @@ export type Knowledge = {
   supportingExperiences: Experience[];
   contradictingExperiences: Experience[];
   confidenceScore: number;
+  noveltyScore?: number | null;
   sourceKnowledgeId?: string | null;
   tags: string[];
   createdAt: string;
@@ -52,6 +53,7 @@ export type KnowledgeProposal = {
   field: string;
   content: string;
   confidenceScore: number;
+  noveltyScore?: number | null;
   supportingExperienceIds: string[];
   sourceKnowledgeId: string | null;
   detectedAt: string;

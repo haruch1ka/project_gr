@@ -64,6 +64,11 @@ router.get('/', async (req, res) => {
     .sort({ createdAt: -1 })
     .limit(10);
 
+  // 既存のdistilled知識を取得（noveltyScore判定の比較用）
+  const existingDistilled = await Knowledge.find({ field, type: 'distilled' })
+    .sort({ createdAt: -1 })
+    .limit(10);
+
   // 仮説照合・パターン検出用に全経験（最大15件）
   const allExperiences = await Experience.find({ field })
     .sort({ createdAt: -1 })
@@ -72,6 +77,10 @@ router.get('/', async (req, res) => {
   // Geminiプロンプト構築
   const hypothesesText = hypotheses.length > 0
     ? hypotheses.map(h => `- ID:${h._id} 内容:「${h.content}」 確信度:${h.confidenceScore.toFixed(2)}`).join('\n')
+    : '（なし）';
+
+  const distilledText = existingDistilled.length > 0
+    ? existingDistilled.map(d => `- 「${d.content}」`).join('\n')
     : '（なし）';
 
   const allExpText = allExperiences
@@ -90,14 +99,33 @@ router.get('/', async (req, res) => {
 
 【タスク2：パターン検出（distilled候補）】
 すべての経験から、このユーザーに固有の傾向やパターンを1つだけ検出してください。
+検出できた場合、以下の2段階で noveltyScore を評価してください。
+
+【noveltyScore評価（2段階）】
+
+ステップA（一般知識ゲート）：
+この分野を実践するうえで「当たり前の基礎知識」と言えるか判定してください。
+例：釣りでのボトム攻略、筋トレでの漸進性過負荷など、入門レベルで誰もが知っている原則。
+当たり前の基礎知識であれば noveltyScore = 0.0 とし、distilledProposal は null を返してください。
+
+ステップB（既存知識との差分）：
+ステップAを通過した場合、既存のdistilled知識リストと内容が実質的に同じであれば noveltyScore を下げてください。
+- 既存知識と内容が重複する：noveltyScore = 0.1〜0.2
+- 関連はあるが新しい観点を含む：noveltyScore = 0.4〜0.6
+- 既存知識にない新規のパターン：noveltyScore = 0.7〜1.0
+
+noveltyScore が 0.3 未満の場合は distilledProposal を null にしてください。
 
 制約（必ず守ること）：
-- Web上の一般知識・「なぜそうなるか」の推論は使用禁止
-- ログに2件以上現れた事実のみを根拠にする
+- Web上の一般知識・「なぜそうなるか」の推論は使用禁止（ステップAの「基礎知識か否か」の判定のみWeb知識を許可）
+- ログに2件以上現れた事実のみをパターンの根拠にする
 - 2件以上の根拠がない場合は null を返す
 
 --- 既存の仮説 ---
 ${hypothesesText}
+
+--- 既存のdistilled知識 ---
+${distilledText}
 
 --- すべての経験 ---
 ${allExpText}
@@ -114,6 +142,7 @@ ${allExpText}
   "distilledProposal": {
     "content": "ログから見えたパターンの説明（日本語・1〜2文）",
     "confidenceScore": 0.0〜1.0の数値,
+    "noveltyScore": 0.0〜1.0の数値,
     "supportingExperienceIds": ["経験のID文字列", ...]
   } | null
 }`;
@@ -123,6 +152,7 @@ ${allExpText}
     distilledProposal?: {
       content: string;
       confidenceScore: number;
+      noveltyScore: number;
       supportingExperienceIds: string[];
     } | null;
   };
@@ -159,13 +189,14 @@ ${allExpText}
     { $set: { analyzed: true } },
   );
 
-  // distilled候補を保存して返す
+  // distilled候補を保存して返す（noveltyScore < 0.3 は保存しない）
   const dp = analysisResult.distilledProposal;
-  if (dp && dp.content) {
+  if (dp && dp.content && (dp.noveltyScore ?? 0) >= 0.3) {
     const saved = await Proposal.create({
       field,
       content:                 dp.content,
       confidenceScore:         Math.min(1, Math.max(0, dp.confidenceScore)),
+      noveltyScore:            Math.min(1, Math.max(0, dp.noveltyScore)),
       supportingExperienceIds: dp.supportingExperienceIds ?? [],
       sourceKnowledgeId:       null,
     });

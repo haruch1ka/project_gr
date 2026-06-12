@@ -145,6 +145,7 @@ export default function DashboardScreen() {
         supportingExperiences:    [],
         contradictingExperiences: [],
         confidenceScore:          proposal.confidenceScore,
+        noveltyScore:             proposal.noveltyScore ?? null,
         sourceKnowledgeId:        proposal.sourceKnowledgeId,
         tags:                     [],
       });

@@ -67,7 +67,7 @@ Explicit → Tacit : 内面化（Internalization）─ 読んで体で覚える
 **project_gr への示唆**:
 - `confidenceScore` は **知識の確信度**だが、ユーザー自身の **熟達段階** も別軸として持てる
 - 同じ仮説知識でも、初心者には「これをやれ」、熟練者には「なぜこれが効くか」を提供すべき
-- Dreyfus の段階は Meta Knowledge の候補
+- Dreyfus の段階は将来的な「上達プロセス自体の知識化」のアイデア候補
 
 ---
 
@@ -219,7 +219,7 @@ score の更新ロジック案:
 | tags | ファセット分類の副軸（Folksonomy 的） |
 | webSources | 形式知（Explicit Knowledge）の入力 |
 | supportingExperiences | 経験→確信度更新の証拠（Likelihood） |
-| Meta Knowledge | Metacognitive Knowledge + Dreyfus 段階の知識 |
+| （将来アイデア） | 上達プロセス自体の知識化（Metacognitive + Dreyfus）。現時点では未実装 |
 
 ---
 

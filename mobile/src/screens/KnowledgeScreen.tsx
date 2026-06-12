@@ -593,34 +593,47 @@ export default function KnowledgeScreen() {
               const fieldKnowledge = allKnowledge.filter(k => k.field === field);
               const assignments = await reorganizeIntoFolders(field, fieldKnowledge, allFolders);
 
-              const folderIdByName = new Map(allFolders.map(f => [f.title, f._id!]));
               const created = new Map<string, string>();
+              const validItemIds = new Set(fieldKnowledge.map(k => k._id).filter(Boolean));
+
+              // 既存フォルダをpathキー（parentId::title または title）でインデックス
+              const existingFolderByKey = new Map<string, string>(
+                allFolders
+                  .filter(f => f._id)
+                  .map(f => {
+                    const key = f.parentId ? `${f.parentId}::${f.title}` : f.title;
+                    return [key, f._id!] as [string, string];
+                  })
+              );
 
               // 親フォルダを先に作成してから子フォルダを処理する（再利用IDも created に記録）
-              const getOrCreateFolder = async (name: string, parentId: string | null): Promise<string> => {
+              const getOrCreateFolder = async (name: string, parentId: string | null): Promise<string | null> => {
+                if (!name || !name.trim()) return null;
                 const key = parentId ? `${parentId}::${name}` : name;
                 if (created.has(key)) return created.get(key)!;
-                const existingId = !parentId ? folderIdByName.get(name) : undefined;
+                const existingId = existingFolderByKey.get(key);
                 if (existingId) { created.set(key, existingId); return existingId; }
-                const f = await folderApi.create({ field, title: name, parentId, order: 0 });
+                const f = await folderApi.create({ field, title: name.trim(), parentId, order: 0 });
                 created.set(key, f._id!);
+                existingFolderByKey.set(key, f._id!);
                 return f._id!;
               };
 
               for (const { itemId, folderName, parentFolderName } of assignments) {
-                let folderId: string;
+                if (!validItemIds.has(itemId)) continue;
+                let folderId: string | null;
                 if (parentFolderName) {
                   const parentId = await getOrCreateFolder(parentFolderName, null);
-                  folderId = await getOrCreateFolder(folderName, parentId);
+                  folderId = parentId ? await getOrCreateFolder(folderName, parentId) : await getOrCreateFolder(folderName, null);
                 } else {
                   folderId = await getOrCreateFolder(folderName, null);
                 }
-                await knowledgeApi.patch(itemId, { folderId });
+                if (folderId) await knowledgeApi.patch(itemId, { folderId });
               }
 
               const usedIds = new Set(created.values());
-              const emptyFolders = allFolders.filter(f => f._id && !usedIds.has(f._id));
-              await Promise.all(emptyFolders.map(f => folderApi.remove(f._id!)));
+              const unusedFolders = allFolders.filter(f => f._id && !usedIds.has(f._id));
+              await Promise.all(unusedFolders.map(f => folderApi.remove(f._id!)));
 
               await load();
               setStack([{ id: null, title: '知識' }]);

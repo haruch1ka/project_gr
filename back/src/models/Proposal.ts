@@ -4,6 +4,7 @@ const proposalSchema = new Schema({
   field:                   { type: String, required: true },
   content:                 { type: String, required: true },
   confidenceScore:         { type: Number, required: true, min: 0, max: 1 },
+  noveltyScore:            { type: Number, default: null, min: 0, max: 1 },
   supportingExperienceIds: { type: [String], default: [] },
   sourceKnowledgeId:       { type: String, default: null },
   detectedAt:              { type: Date, default: Date.now },
