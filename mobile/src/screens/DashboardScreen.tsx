@@ -15,6 +15,7 @@ import { Cog6ToothIcon } from 'react-native-heroicons/outline';
 import { knowledgeApi, planApi, proposalApi } from '../services/api';
 import { Knowledge, KnowledgeProposal, Plan } from '../types';
 import { knowledgeColor, knowledgeLabel } from '../utils/knowledge';
+import { cacheRead, cacheWrite } from '../utils/dataCache';
 
 type Nav = CompositeNavigationProp<
   BottomTabNavigationProp<FieldTabParamList>,
@@ -93,7 +94,20 @@ export default function DashboardScreen() {
   }, []);
 
   const fetchData = useCallback(async (refresh = false) => {
-    if (!refresh) setLoading(true);
+    if (!refresh) {
+      const [cachedKnowledge, cachedPlans] = await Promise.all([
+        cacheRead<Knowledge[]>('knowledge', activeField),
+        cacheRead<Plan[]>('plan', activeField),
+      ]);
+      if (cachedKnowledge && cachedPlans) {
+        setKnowledge(cachedKnowledge);
+        setNextPlan(cachedPlans.find(p => p.reviewedAt === null) ?? null);
+        await loadProposal(activeField);
+        setLoading(false);
+        return;
+      }
+    }
+    setLoading(true);
     try {
       const [knowledgeData, plans] = await Promise.all([
         knowledgeApi.list({ field: activeField }),
@@ -101,7 +115,11 @@ export default function DashboardScreen() {
       ]);
       setKnowledge(knowledgeData);
       setNextPlan(plans.find(p => p.reviewedAt === null) ?? null);
-      await loadProposal(activeField);
+      await Promise.all([
+        cacheWrite('knowledge', activeField, knowledgeData),
+        cacheWrite('plan', activeField, plans),
+        loadProposal(activeField),
+      ]);
     } catch (e) {
       console.error(e);
     } finally {
@@ -132,9 +150,9 @@ export default function DashboardScreen() {
       });
       await AsyncStorage.removeItem(PROPOSAL_CACHE_KEY(activeField));
       setProposal(null);
-      // 知識一覧を再取得
       const updated = await knowledgeApi.list({ field: activeField });
       setKnowledge(updated);
+      await cacheWrite('knowledge', activeField, updated);
     } catch {
       Alert.alert('エラー', '知識の保存に失敗しました');
     }

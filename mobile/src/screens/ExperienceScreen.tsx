@@ -8,6 +8,7 @@ import { useField } from '../context/FieldContext';
 import { colors, font } from '../constants/theme';
 import { experienceApi } from '../services/api';
 import { Experience } from '../types/index';
+import { cacheRead, cacheWrite } from '../utils/dataCache';
 import { TrashIcon } from 'react-native-heroicons/outline';
 
 const DELETE_BTN_W = 72;
@@ -81,10 +82,19 @@ export default function ExperienceScreen() {
 
   const fetchLogs = useCallback(async (refresh = false) => {
     if (!field) { setLoading(false); return; }
-    if (!refresh) setLoading(true);
+    if (!refresh) {
+      const cached = await cacheRead<Experience[]>('experience', field);
+      if (cached) {
+        setLogs(cached);
+        setLoading(false);
+        return;
+      }
+    }
+    setLoading(true);
     try {
       const data = await experienceApi.list(field);
       setLogs(data);
+      await cacheWrite('experience', field, data);
     } catch (e) {
       console.error(e);
     } finally {
@@ -98,11 +108,15 @@ export default function ExperienceScreen() {
   const handleDelete = useCallback(async (id: string) => {
     try {
       await experienceApi.remove(id);
-      setLogs(prev => prev.filter(l => l._id !== id));
+      setLogs(prev => {
+        const next = prev.filter(l => l._id !== id);
+        cacheWrite('experience', field, next);
+        return next;
+      });
     } catch (e) {
       console.error(e);
     }
-  }, []);
+  }, [field]);
 
   useEffect(() => { fetchLogs(); }, [fetchLogs]);
 

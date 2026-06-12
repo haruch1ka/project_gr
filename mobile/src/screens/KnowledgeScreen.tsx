@@ -15,6 +15,7 @@ import { knowledgeApi, folderApi } from '../services/api';
 import { reorganizeIntoFolders, GeminiRateLimitError } from '../services/gemini';
 import { Knowledge, KnowledgeFolder } from '../types';
 import { knowledgeColor, knowledgeLabel } from '../utils/knowledge';
+import { cacheRead, cacheWrite } from '../utils/dataCache';
 import { RootStackParamList } from '../../App';
 import { useField } from '../context/FieldContext';
 
@@ -444,7 +445,19 @@ export default function KnowledgeScreen() {
   const currentFolderId = stack[stack.length - 1].id;
 
   const load = useCallback(async (refresh = false) => {
-    if (!refresh) setLoading(true);
+    if (!refresh) {
+      const [cachedFolders, cachedKnowledge] = await Promise.all([
+        cacheRead<KnowledgeFolder[]>('folders', field),
+        cacheRead<Knowledge[]>('knowledge', field),
+      ]);
+      if (cachedFolders && cachedKnowledge) {
+        setAllFolders(cachedFolders);
+        setAllKnowledge(cachedKnowledge);
+        setLoading(false);
+        return;
+      }
+    }
+    setLoading(true);
     try {
       const [folders, knowledge] = await Promise.all([
         folderApi.list(field).catch(() => [] as KnowledgeFolder[]),
@@ -452,6 +465,10 @@ export default function KnowledgeScreen() {
       ]);
       setAllFolders(folders);
       setAllKnowledge(knowledge);
+      await Promise.all([
+        cacheWrite('folders', field, folders),
+        cacheWrite('knowledge', field, knowledge),
+      ]);
     } catch (e) {
       console.error(e);
     } finally {
@@ -502,18 +519,28 @@ export default function KnowledgeScreen() {
     try {
       await folderApi.remove(id);
       const deadIds = collectDescendantIds(id, allFolders);
-      setAllFolders(prev => prev.filter(f => !deadIds.has(f._id!)));
-      setAllKnowledge(prev =>
-        prev.map(k => (k.folderId && deadIds.has(k.folderId)) ? { ...k, folderId: null } : k)
+      const nextFolders   = allFolders.filter(f => !deadIds.has(f._id!));
+      const nextKnowledge = allKnowledge.map(k =>
+        (k.folderId && deadIds.has(k.folderId)) ? { ...k, folderId: null } : k
       );
+      setAllFolders(nextFolders);
+      setAllKnowledge(nextKnowledge);
+      await Promise.all([
+        cacheWrite('folders', field, nextFolders),
+        cacheWrite('knowledge', field, nextKnowledge),
+      ]);
     } catch {
       Alert.alert('エラー', '削除に失敗しました');
     }
   }
 
   const handleDeleteKnowledge = useCallback((id: string) => {
-    setAllKnowledge(prev => prev.filter(k => k._id !== id));
-  }, []);
+    setAllKnowledge(prev => {
+      const next = prev.filter(k => k._id !== id);
+      cacheWrite('knowledge', field, next);
+      return next;
+    });
+  }, [field]);
 
   function toggleCategory(c: string) {
     setFilterCategories(prev => { const n = new Set(prev); n.has(c) ? n.delete(c) : n.add(c); return n; });
