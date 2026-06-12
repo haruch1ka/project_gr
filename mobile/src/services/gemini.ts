@@ -49,6 +49,21 @@ async function callGemini(
   }
 }
 
+// ─── カテゴリ名バリデーション ─────────────────────────────────────────────
+
+export type CategoryValidation = { valid: boolean; reason?: string };
+
+// 複合名称の禁止パターン：助詞で概念をつなぐ・長すぎる
+export function isValidCategory(name: string): CategoryValidation {
+  if (!name || name.trim().length === 0)
+    return { valid: false, reason: '空文字' };
+  if (name.length > 10)
+    return { valid: false, reason: `長すぎる（${name.length}文字）` };
+  if (/[とやを]/.test(name))
+    return { valid: false, reason: `助詞「${name.match(/[とやを]/)?.[0]}」で概念が結合されている` };
+  return { valid: true };
+}
+
 // ─── 公開API ─────────────────────────────────────────────────────────────
 
 export async function chat(prompt: string, systemInstruction = ''): Promise<string> {
@@ -167,10 +182,12 @@ export async function generateHypotheses(
   youtubeUrl?:        string,
   existingCategories: string[] = [],
 ): Promise<HypothesisCandidate[]> {
-  const jsonSchema = `{"groupCategory":"<全仮説をまとめる共通カテゴリ（1単語）>","hypotheses":[{"content":"<仮説>","subcategory":"<細分類（1単語）、不要なら空文字>"}]}`;
+  const jsonSchema = `{"groupCategory":"<全仮説をまとめる単一概念の名詞1語（広い粒度）>","hypotheses":[{"content":"<仮説>","subcategory":"<細分類（1語）、不要なら空文字>"}]}`;
 
   const categoryRules = `カテゴリのルール：
-- 分類名は必ず1単語にする（日本語・英語どちらも可）
+- 単一概念を表す名詞1語にする（日本語・英語どちらも可）
+- 場所・条件・手段・目的を組み合わせた名称は禁止。例：「木曽川ルアーカラー攻略」「光量とルアーカラー」はNG
+- 広い粒度で抽象化する。例：「ルアーカラー」「キャスト」「食事」「睡眠」はOK
 - 既存カテゴリと同じ意味の場合は既存のものをそのまま使い、重複した分類名を絶対に作らない`;
 
   const categoryHint = existingCategories.length > 0
@@ -203,7 +220,16 @@ JSON形式で返してください：${jsonSchema}`;
     groupCategory: string;
     hypotheses: Array<{ content: string; subcategory: string }>;
   };
-  const raw = await chatJSON<RawResponse>(prompt);
+
+  // カテゴリが無効なら1回だけ再試行
+  let raw = await chatJSON<RawResponse>(prompt);
+  if (!isValidCategory(raw.groupCategory).valid) {
+    const retryPrompt = prompt +
+      `\n\n【重要】前回の回答のgroupCategory "${raw.groupCategory}" は無効です。` +
+      `10文字以内・助詞（と/や）不使用・単一概念の名詞1語に修正してください。`;
+    raw = await chatJSON<RawResponse>(retryPrompt);
+  }
+
   return raw.hypotheses.map(h => ({
     content:     h.content,
     category:    raw.groupCategory,
@@ -238,9 +264,9 @@ export async function reorganizeIntoFolders(
 以下の知識を、内容だけを見て2階層のフォルダ構造に整理してください。現在のフォルダ構造は参考程度に示しますが、それに縛られず最適な構造を作り直してください。
 
 ルール：
-- 意味が近い知識は共通の「親フォルダ」にまとめること（例：ルアーカラー、キャスト技術）
+- 意味が近い知識は共通の「親フォルダ」にまとめること
 - 「子フォルダ」は親フォルダ内に8件以上ある場合のみ作成する。それ未満は子フォルダなし（folderName=親フォルダ名、parentFolderName=null）
-- フォルダ名は15文字以内の簡潔な名称
+- フォルダ名は単一概念の名詞1語（最大10文字）にすること。場所・条件・手段を組み合わせた名称は禁止（例：「木曽川ルアーカラー攻略」はNG、「ルアーカラー」はOK）
 - 目安：知識10件に対して親フォルダ2〜4個
 
 現在のフォルダ（参考）：${existingList}

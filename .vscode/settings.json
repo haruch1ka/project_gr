@@ -23,6 +23,8 @@
   "git.ignoreLimitWarning": true,
   "git.decorations.enabled": true,
   "java.import.gradle.enabled": false,
+  "java.import.maven.enabled": false,
+  "java.project.resourceFilters": ["node_modules", ".git"],
   "java.import.exclusions": [
     "**/mobile/android/**",
     "**/node_modules/**"
