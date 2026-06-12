@@ -107,9 +107,9 @@ cd mobile && pnpm check:prompts      # Geminiプロンプト実動確認（実AP
 
 ## 既知のハマりパターンと解決策
 
-作業中に遭遇した問題と解決済みパターンを [`mobile/docs/notes/`](mobile/docs/notes/) にまとめている。
+作業中に遭遇した問題と解決済みパターンを [`docs/notes/`](docs/notes/) にまとめている。
 新たな問題に取り組む前に必ず参照すること。
 
 | ファイル | 内容 |
 |----------|------|
-| [`jest-output-in-non-tty.md`](mobile/docs/notes/jest-output-in-non-tty.md) | 非TTY環境で `--verbose` のテスト名が出ない → `--json` で解決 |
+| [`jest-output-in-non-tty.md`](docs/notes/jest-output-in-non-tty.md) | 非TTY環境で `--verbose` のテスト名が出ない → `--json` で解決 |
