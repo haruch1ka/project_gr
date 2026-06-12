@@ -213,7 +213,7 @@ JSON形式で返してください：${jsonSchema}`;
 
 // ─── 知識のフォルダ再整理 ────────────────────────────────────────────────
 
-export type FolderAssignment = { itemId: string; folderName: string };
+export type FolderAssignment = { itemId: string; folderName: string; parentFolderName?: string | null };
 
 export async function reorganizeIntoFolders(
   field: string,
@@ -235,21 +235,24 @@ export async function reorganizeIntoFolders(
     : '（なし）';
 
   const prompt = `分野：${field}
-以下の知識を適切なフォルダに整理してください。
+以下の知識を、内容だけを見て2階層のフォルダ構造に整理してください。現在のフォルダ構造は参考程度に示しますが、それに縛られず最適な構造を作り直してください。
 
 ルール：
-- 既存フォルダ名は積極的に再利用する（完全一致で再利用）
-- 1つのフォルダに5件以上集中する場合は細分化する
-- 関連性の低い項目が混在していれば適切なフォルダに移動する
-- 必要なら新しいフォルダを追加する（15文字以内）
+- 意味が近い知識は共通の「親フォルダ」にまとめること（例：ルアーカラー、キャスト技術）
+- 「子フォルダ」は親フォルダ内に8件以上ある場合のみ作成する。それ未満は子フォルダなし（folderName=親フォルダ名、parentFolderName=null）
+- フォルダ名は15文字以内の簡潔な名称
+- 目安：知識10件に対して親フォルダ2〜4個
 
-既存フォルダ：${existingList}
+現在のフォルダ（参考）：${existingList}
 
 知識一覧：
 [${itemList}]
 
 各知識の配置先をJSON配列で返してください（itemIdは入力のitemIdをそのまま使用）：
-[{"itemId":"<itemId>","folderName":"<フォルダ名>"}]`;
+- 親フォルダのみの場合：{"itemId":"<id>","folderName":"<親フォルダ名>","parentFolderName":null}
+- 子フォルダに入れる場合：{"itemId":"<id>","folderName":"<子フォルダ名>","parentFolderName":"<親フォルダ名>"}
+
+[{"itemId":"...","folderName":"...","parentFolderName":null}]`;
 
   return chatJSON<FolderAssignment[]>(prompt);
 }

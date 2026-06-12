@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -146,20 +146,56 @@ const tabStyles = StyleSheet.create({
 function EmptyScreen() { return null; }
 
 function FieldTabNavigator({ route }: { route: RouteProp<RootStackParamList, 'FieldTabs'> }) {
-  const initialField = route.params?.field;
+  const { setActiveField } = useField();
+  const fieldParam = route.params?.field;
+
+  useEffect(() => {
+    if (fieldParam) setActiveField(fieldParam);
+  }, [fieldParam]);
+
   return (
-    <FieldProvider initialField={initialField}>
-      <FieldTab.Navigator
-        tabBar={props => <FieldTabBar {...props} />}
-        screenOptions={{ headerShown: false }}
+    <FieldTab.Navigator
+      tabBar={props => <FieldTabBar {...props} />}
+      screenOptions={{ headerShown: false }}
+    >
+      <FieldTab.Screen name="Dashboard" component={DashboardScreen} />
+      <FieldTab.Screen name="Knowledge" component={KnowledgeScreen} />
+      <FieldTab.Screen name="_FieldLog" component={EmptyScreen} />
+      <FieldTab.Screen name="Chat"       component={ChatScreen} />
+      <FieldTab.Screen name="Experience" component={ExperienceScreen} />
+    </FieldTab.Navigator>
+  );
+}
+
+// ─── ナビゲーター（FieldContext 配下） ────────────────────────────────────
+
+function AppNavigator() {
+  const { fields, loading } = useField();
+
+  // フィールド読み込み完了まで空画面
+  if (loading) return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
+
+  return (
+    <NavigationContainer>
+      <Stack.Navigator
+        screenOptions={{ headerShown: false, animation: 'slide_from_right' }}
+        initialRouteName={fields.length === 0 ? 'Home' : 'FieldTabs'}
       >
-        <FieldTab.Screen name="Dashboard" component={DashboardScreen} />
-        <FieldTab.Screen name="Knowledge" component={KnowledgeScreen} />
-        <FieldTab.Screen name="_FieldLog" component={EmptyScreen} />
-        <FieldTab.Screen name="Chat"       component={ChatScreen} />
-        <FieldTab.Screen name="Experience" component={ExperienceScreen} />
-      </FieldTab.Navigator>
-    </FieldProvider>
+        <Stack.Screen name="FieldTabs" component={FieldTabNavigator} />
+        <Stack.Screen name="Home"      component={HomeScreen} />
+        <Stack.Screen name="Log"       component={LogScreen} />
+        <Stack.Screen name="KnowledgeItem"     component={KnowledgeItemScreen} />
+        <Stack.Screen name="Web"       component={WebScreen} />
+        <Stack.Screen
+          name="QuickLog"
+          component={QuickLogScreen}
+          options={{ presentation: 'transparentModal', animation: 'slide_from_bottom' }}
+        />
+        <Stack.Screen name="Settings"   component={SettingsScreen} />
+        <Stack.Screen name="Hypothesis" component={HypothesisScreen} />
+        <Stack.Screen name="Plan"       component={PlanScreen} />
+      </Stack.Navigator>
+    </NavigationContainer>
   );
 }
 
@@ -168,23 +204,9 @@ function FieldTabNavigator({ route }: { route: RouteProp<RootStackParamList, 'Fi
 export default function App() {
   return (
     <SafeAreaProvider>
-      <NavigationContainer>
-        <Stack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
-          <Stack.Screen name="FieldTabs" component={FieldTabNavigator} />
-          <Stack.Screen name="Home"      component={HomeScreen} />
-          <Stack.Screen name="Log"       component={LogScreen} />
-          <Stack.Screen name="KnowledgeItem"     component={KnowledgeItemScreen} />
-          <Stack.Screen name="Web"       component={WebScreen} />
-          <Stack.Screen
-            name="QuickLog"
-            component={QuickLogScreen}
-            options={{ presentation: 'transparentModal', animation: 'slide_from_bottom' }}
-          />
-          <Stack.Screen name="Settings"   component={SettingsScreen} />
-          <Stack.Screen name="Hypothesis" component={HypothesisScreen} />
-          <Stack.Screen name="Plan"       component={PlanScreen} />
-        </Stack.Navigator>
-      </NavigationContainer>
+      <FieldProvider>
+        <AppNavigator />
+      </FieldProvider>
     </SafeAreaProvider>
   );
 }

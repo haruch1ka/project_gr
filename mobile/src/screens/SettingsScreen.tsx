@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  ScrollView, TextInput, Alert, Modal, TouchableWithoutFeedback, Keyboard,
+  ScrollView, TextInput, Alert, Modal, TouchableWithoutFeedback,
+  Keyboard, ActivityIndicator,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import {
@@ -10,7 +11,66 @@ import {
 } from 'react-native-heroicons/outline';
 import { useField } from '../context/FieldContext';
 import { colors, font, radius } from '../constants/theme';
+
 const ICON_OPTIONS = ['🎣', '💪', '📖', '🎸', '🏊', '🧘', '🍳', '✏️', '🎾', '⚽', '🎨', '🎮'];
+const BACK_URL = 'https://project-gr-back.vercel.app';
+
+// ─── 接続テスト ───────────────────────────────────────────────────────────
+
+type TestStatus = 'idle' | 'running' | 'ok' | 'error';
+type TestResult = { status: TestStatus; ms?: number; detail?: string };
+
+async function testBackend(): Promise<TestResult> {
+  const t0 = Date.now();
+  try {
+    const res = await fetch(`${BACK_URL}/fields`, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return { status: 'error', detail: `HTTP ${res.status}` };
+    return { status: 'ok', ms: Date.now() - t0 };
+  } catch (e: any) {
+    return { status: 'error', detail: e?.message ?? 'timeout' };
+  }
+}
+
+async function testGemini(): Promise<TestResult> {
+  const t0 = Date.now();
+  try {
+    const res = await fetch(`${BACK_URL}/gemini/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: [{ role: 'user', parts: [{ text: 'ping' }] }] }),
+      signal: AbortSignal.timeout(20000),
+    });
+    if (!res.ok) return { status: 'error', detail: `HTTP ${res.status}` };
+    return { status: 'ok', ms: Date.now() - t0 };
+  } catch (e: any) {
+    return { status: 'error', detail: e?.message ?? 'timeout' };
+  }
+}
+
+async function testTavily(): Promise<TestResult> {
+  const t0 = Date.now();
+  try {
+    const res = await fetch(`${BACK_URL}/tavily/search`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: 'test' }),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) return { status: 'error', detail: `HTTP ${res.status}` };
+    return { status: 'ok', ms: Date.now() - t0 };
+  } catch (e: any) {
+    return { status: 'error', detail: e?.message ?? 'timeout' };
+  }
+}
+
+function StatusBadge({ result }: { result: TestResult }) {
+  if (result.status === 'idle')    return <Text style={styles.badgeIdle}>—</Text>;
+  if (result.status === 'running') return <ActivityIndicator size="small" color={colors.textMuted} />;
+  if (result.status === 'ok')      return <Text style={styles.badgeOk}>OK  {result.ms}ms</Text>;
+  return <Text style={styles.badgeError}>ERR  {result.detail}</Text>;
+}
+
+// ─── メイン画面 ───────────────────────────────────────────────────────────
 
 export default function SettingsScreen() {
   const navigation = useNavigation();
@@ -18,6 +78,11 @@ export default function SettingsScreen() {
   const [modalVisible,  setModalVisible]  = useState(false);
   const [newName,       setNewName]       = useState('');
   const [selectedIcon,  setSelectedIcon]  = useState(ICON_OPTIONS[0]);
+
+  const [backendResult, setBackendResult] = useState<TestResult>({ status: 'idle' });
+  const [geminiResult,  setGeminiResult]  = useState<TestResult>({ status: 'idle' });
+  const [tavilyResult,  setTavilyResult]  = useState<TestResult>({ status: 'idle' });
+  const [testing, setTesting] = useState(false);
 
   const openModal = () => {
     setNewName('');
@@ -36,15 +101,34 @@ export default function SettingsScreen() {
     setModalVisible(false);
   };
 
-  const handleRemove = (name: string) => {
+  const handleRemove = (id: string, name: string) => {
     if (fields.length <= 1) {
       Alert.alert('エラー', '最低1つの分野が必要です');
       return;
     }
     Alert.alert('削除確認', `「${name}」を削除しますか？`, [
       { text: 'キャンセル', style: 'cancel' },
-      { text: '削除', style: 'destructive', onPress: () => removeField(name) },
+      { text: '削除', style: 'destructive', onPress: () => removeField(id) },
     ]);
+  };
+
+  const runTests = async () => {
+    if (testing) return;
+    setTesting(true);
+    setBackendResult({ status: 'running' });
+    setGeminiResult({ status: 'running' });
+    setTavilyResult({ status: 'running' });
+
+    const [backend, gemini, tavily] = await Promise.all([
+      testBackend(),
+      testGemini(),
+      testTavily(),
+    ]);
+
+    setBackendResult(backend);
+    setGeminiResult(gemini);
+    setTavilyResult(tavily);
+    setTesting(false);
   };
 
   return (
@@ -69,7 +153,7 @@ export default function SettingsScreen() {
               <Text style={styles.fieldIcon}>{f.icon}</Text>
               <Text style={styles.fieldName}>{f.name}</Text>
               <TouchableOpacity
-                onPress={() => handleRemove(f.name)}
+                onPress={() => handleRemove(f._id!, f.name)}
                 activeOpacity={0.7}
                 style={styles.removeBtn}
               >
@@ -80,6 +164,33 @@ export default function SettingsScreen() {
           <TouchableOpacity style={styles.addRow} onPress={openModal} activeOpacity={0.7}>
             <PlusIcon size={16} color={colors.primary} strokeWidth={2} />
             <Text style={styles.addRowText}>分野を追加</Text>
+          </TouchableOpacity>
+        </View>
+
+        <Text style={styles.sectionLabel}>接続テスト</Text>
+        <View style={styles.card}>
+          {[
+            { label: 'バックエンド', result: backendResult },
+            { label: 'Gemini',      result: geminiResult  },
+            { label: 'Tavily',      result: tavilyResult  },
+          ].map(({ label, result }, i, arr) => (
+            <View
+              key={label}
+              style={[styles.testRow, i < arr.length - 1 && styles.fieldBorder]}
+            >
+              <Text style={styles.testLabel}>{label}</Text>
+              <StatusBadge result={result} />
+            </View>
+          ))}
+          <TouchableOpacity
+            style={[styles.testRunBtn, testing && { opacity: 0.5 }]}
+            onPress={runTests}
+            disabled={testing}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.testRunText}>
+              {testing ? 'テスト中…' : 'テスト実行'}
+            </Text>
           </TouchableOpacity>
         </View>
 
@@ -180,6 +291,21 @@ const styles = StyleSheet.create({
     borderTopWidth: 1, borderTopColor: colors.border,
   },
   addRowText: { fontSize: font.sm, color: colors.primary, fontWeight: '600' },
+
+  // 接続テスト
+  testRow: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 14, paddingVertical: 13, gap: 10,
+  },
+  testLabel:   { flex: 1, fontSize: font.sm, color: colors.text },
+  badgeIdle:   { fontSize: font.sm, color: colors.textSecondary },
+  badgeOk:     { fontSize: font.sm, color: colors.primary, fontWeight: '600' },
+  badgeError:  { fontSize: font.sm, color: colors.danger, fontWeight: '600', flexShrink: 1 },
+  testRunBtn: {
+    borderTopWidth: 1, borderTopColor: colors.border,
+    paddingHorizontal: 14, paddingVertical: 13, alignItems: 'center',
+  },
+  testRunText: { fontSize: font.sm, color: colors.blue, fontWeight: '600' },
 
   infoRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
