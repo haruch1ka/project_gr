@@ -20,10 +20,10 @@ describe('SCORE_DELTA', () => {
     expect(SCORE_DELTA.neutral.low).toBe(0);
   });
 
-  it('supportingとcontradictingは対称', () => {
-    expect(SCORE_DELTA.supporting.high).toBe(-SCORE_DELTA.contradicting.high);
-    expect(SCORE_DELTA.supporting.medium).toBe(-SCORE_DELTA.contradicting.medium);
-    expect(SCORE_DELTA.supporting.low).toBe(-SCORE_DELTA.contradicting.low);
+  it('反証は支持より絶対値が大きい（非対称・反証主義）', () => {
+    expect(Math.abs(SCORE_DELTA.contradicting.high)).toBeGreaterThan(SCORE_DELTA.supporting.high);
+    expect(Math.abs(SCORE_DELTA.contradicting.medium)).toBeGreaterThan(SCORE_DELTA.supporting.medium);
+    expect(Math.abs(SCORE_DELTA.contradicting.low)).toBeGreaterThan(SCORE_DELTA.supporting.low);
   });
 });
 

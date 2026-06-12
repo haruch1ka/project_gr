@@ -105,10 +105,11 @@ type EvidenceItem = {
   likelihood:  'high' | 'medium' | 'low';
 };
 
+// 反証は支持より1.5倍重く扱う（反証主義の設計原則に基づく）
 export const SCORE_DELTA: Record<EvidenceItem['relation'], Record<EvidenceItem['likelihood'], number>> = {
-  supporting:    { high: 0.12, medium: 0.06, low: 0.02 },
-  contradicting: { high: -0.12, medium: -0.06, low: -0.02 },
-  neutral:       { high: 0, medium: 0, low: 0 },
+  supporting:    { high:  0.10, medium:  0.06, low:  0.02 },
+  contradicting: { high: -0.15, medium: -0.09, low: -0.03 },
+  neutral:       { high:  0,    medium:  0,    low:  0    },
 };
 
 export async function updateKnowledgeFromExperience(
