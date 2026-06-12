@@ -196,6 +196,104 @@ describe('GET /proposals', () => {
     const res = await request(app).get('/proposals?field=釣り');
     expect(res.body.proposal.confidenceScore).toBeLessThanOrEqual(1.0);
   });
+
+  it('複数の未分析経験がまとめてanalyze済みになる', async () => {
+    await Experience.insertMany([
+      { field: '釣り', date: '6/1', memo: '経験A', analyzed: false },
+      { field: '釣り', date: '6/2', memo: '経験B', analyzed: false },
+      { field: '釣り', date: '6/3', memo: '経験C', analyzed: false },
+    ]);
+
+    mockFetch.mockResolvedValueOnce(geminiResponse({
+      hypothesisUpdates: [],
+      distilledProposal: null,
+    }));
+
+    await request(app).get('/proposals?field=釣り');
+
+    const remaining = await Experience.find({ field: '釣り', analyzed: false });
+    expect(remaining).toHaveLength(0);
+  });
+
+  it('複数の仮説が一度に更新される', async () => {
+    const [k1, k2] = await Knowledge.insertMany([
+      { field: '釣り', type: 'hypothesis', category: 'A', content: '仮説1', confidenceScore: 0.5 },
+      { field: '釣り', type: 'hypothesis', category: 'B', content: '仮説2', confidenceScore: 0.4 },
+    ]);
+    await Experience.create({ field: '釣り', date: '6/1', memo: '経験', analyzed: false });
+
+    mockFetch.mockResolvedValueOnce(geminiResponse({
+      hypothesisUpdates: [
+        { knowledgeId: k1._id.toString(), direction: 'supporting',    likelihood: 'high' },
+        { knowledgeId: k2._id.toString(), direction: 'contradicting', likelihood: 'low' },
+      ],
+      distilledProposal: null,
+    }));
+
+    await request(app).get('/proposals?field=釣り');
+
+    const updated1 = await Knowledge.findById(k1._id);
+    const updated2 = await Knowledge.findById(k2._id);
+    expect(updated1?.confidenceScore).toBeGreaterThan(0.5);
+    expect(updated2?.confidenceScore).toBeLessThan(0.4);
+  });
+
+  it('unrelated な更新はスコアを変えない', async () => {
+    const k = await Knowledge.create({
+      field: '釣り', type: 'hypothesis', category: 'A', content: '仮説', confidenceScore: 0.5,
+    });
+    await Experience.create({ field: '釣り', date: '6/1', memo: '無関係な経験', analyzed: false });
+
+    mockFetch.mockResolvedValueOnce(geminiResponse({
+      hypothesisUpdates: [
+        { knowledgeId: k._id.toString(), direction: 'unrelated', likelihood: 'high' },
+      ],
+      distilledProposal: null,
+    }));
+
+    await request(app).get('/proposals?field=釣り');
+
+    const unchanged = await Knowledge.findById(k._id);
+    expect(unchanged?.confidenceScore).toBeCloseTo(0.5);
+  });
+
+  it('supportingExperienceIds が Proposal に保存される', async () => {
+    const exp = await Experience.create({ field: '釣り', date: '6/1', memo: '経験', analyzed: false });
+
+    mockFetch.mockResolvedValueOnce(geminiResponse({
+      hypothesisUpdates: [],
+      distilledProposal: {
+        content: 'パターン発見',
+        confidenceScore: 0.7,
+        supportingExperienceIds: [exp._id.toString()],
+      },
+    }));
+
+    await request(app).get('/proposals?field=釣り');
+
+    const saved = await Proposal.findOne({ field: '釣り' });
+    expect(saved?.supportingExperienceIds).toContain(exp._id.toString());
+  });
+
+  it('別fieldの経験・知識は処理しない', async () => {
+    const otherFieldKnowledge = await Knowledge.create({
+      field: '筋トレ', type: 'hypothesis', category: 'A', content: '別分野の仮説', confidenceScore: 0.5,
+    });
+    await Experience.create({ field: '釣り', date: '6/1', memo: '釣り経験', analyzed: false });
+
+    mockFetch.mockResolvedValueOnce(geminiResponse({
+      hypothesisUpdates: [
+        { knowledgeId: otherFieldKnowledge._id.toString(), direction: 'supporting', likelihood: 'high' },
+      ],
+      distilledProposal: null,
+    }));
+
+    await request(app).get('/proposals?field=釣り');
+
+    // 別fieldの知識は釣りの仮説一覧に含まれないのでスコアは変わらない
+    const untouched = await Knowledge.findById(otherFieldKnowledge._id);
+    expect(untouched?.confidenceScore).toBeCloseTo(0.5);
+  });
 });
 
 // ─── DELETE /proposals/:id ────────────────────────────────────────────────────
