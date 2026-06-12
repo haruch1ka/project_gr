@@ -1,4 +1,4 @@
-import { SCORE_DELTA, reorganizeIntoFolders, FolderAssignment, isValidCategory } from '../gemini';
+import { SCORE_DELTA, reorganizeIntoFolders, FolderAssignment, isValidCategory, updateKnowledgeFromExperience } from '../gemini';
 import type { Knowledge } from '../../types';
 
 // ── SCORE_DELTA ─────────────────────────────────────────────────────────────
@@ -136,5 +136,125 @@ describe('reorganizeIntoFolders', () => {
 
     const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
     expect(body.messages[0].parts[0].text).toContain('ルアー');
+  });
+});
+
+// ── updateKnowledgeFromExperience ────────────────────────────────────────────
+
+// fetch を3段階で差し替えるヘルパー
+// 順番: 1) knowledgeApi.list  2) Gemini  3) knowledgeApi.patch × n
+function mockUpdateFetch(
+  knowledgeItems: ReturnType<typeof baseKnowledge>[],
+  evidence: { knowledgeId: string; relation: string; likelihood: string }[],
+  patchCount = 1,
+) {
+  const calls: jest.Mock[] = [
+    jest.fn().mockResolvedValueOnce({ ok: true, json: async () => knowledgeItems }),
+    jest.fn().mockResolvedValueOnce({ ok: true, json: async () => ({ text: JSON.stringify(evidence) }) }),
+  ];
+  for (let i = 0; i < patchCount; i++) {
+    calls.push(jest.fn().mockResolvedValueOnce({ ok: true, json: async () => ({}) }));
+  }
+  let i = 0;
+  global.fetch = jest.fn().mockImplementation(() => calls[i++]());
+}
+
+describe('updateKnowledgeFromExperience', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('知識が0件なら Gemini を呼ばずに終了する', async () => {
+    global.fetch = jest.fn().mockResolvedValueOnce({ ok: true, json: async () => [] } as any);
+
+    await updateKnowledgeFromExperience('釣り', 'テスト経験');
+
+    expect(global.fetch).toHaveBeenCalledTimes(1); // list のみ
+  });
+
+  it('supporting/high の証拠でスコアが正しく増加する', async () => {
+    const k = baseKnowledge({ _id: 'k1', confidenceScore: 0.5 });
+    mockUpdateFetch(
+      [k],
+      [{ knowledgeId: 'k1', relation: 'supporting', likelihood: 'high' }],
+    );
+
+    await updateKnowledgeFromExperience('釣り', '朝マズメにシーバス3匹');
+
+    const patchBody = JSON.parse((global.fetch as jest.Mock).mock.calls[2][1].body);
+    expect(patchBody.confidenceScore).toBeCloseTo(0.5 + SCORE_DELTA.supporting.high);
+  });
+
+  it('contradicting/medium の証拠でスコアが減少する', async () => {
+    const k = baseKnowledge({ _id: 'k1', confidenceScore: 0.5 });
+    mockUpdateFetch(
+      [k],
+      [{ knowledgeId: 'k1', relation: 'contradicting', likelihood: 'medium' }],
+    );
+
+    await updateKnowledgeFromExperience('釣り', 'ルアーに全く反応なし');
+
+    const patchBody = JSON.parse((global.fetch as jest.Mock).mock.calls[2][1].body);
+    expect(patchBody.confidenceScore).toBeCloseTo(0.5 + SCORE_DELTA.contradicting.medium);
+  });
+
+  it('neutral の証拠は PATCH しない', async () => {
+    const k = baseKnowledge({ _id: 'k1', confidenceScore: 0.5 });
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => [k] } as any)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ text: JSON.stringify([{ knowledgeId: 'k1', relation: 'neutral', likelihood: 'high' }]) }),
+      } as any);
+
+    await updateKnowledgeFromExperience('釣り', '関係ない経験');
+
+    expect(global.fetch).toHaveBeenCalledTimes(2); // list + Gemini のみ
+  });
+
+  it('スコアは 1.0 を超えない（上限クランプ）', async () => {
+    const k = baseKnowledge({ _id: 'k1', confidenceScore: 0.95 });
+    mockUpdateFetch(
+      [k],
+      [{ knowledgeId: 'k1', relation: 'supporting', likelihood: 'high' }],
+    );
+
+    await updateKnowledgeFromExperience('釣り', '強力な支持経験');
+
+    const patchBody = JSON.parse((global.fetch as jest.Mock).mock.calls[2][1].body);
+    expect(patchBody.confidenceScore).toBeLessThanOrEqual(1.0);
+  });
+
+  it('スコアは 0.0 を下回らない（下限クランプ）', async () => {
+    const k = baseKnowledge({ _id: 'k1', confidenceScore: 0.05 });
+    mockUpdateFetch(
+      [k],
+      [{ knowledgeId: 'k1', relation: 'contradicting', likelihood: 'high' }],
+    );
+
+    await updateKnowledgeFromExperience('釣り', '強い反証経験');
+
+    const patchBody = JSON.parse((global.fetch as jest.Mock).mock.calls[2][1].body);
+    expect(patchBody.confidenceScore).toBeGreaterThanOrEqual(0.0);
+  });
+
+  it('複数知識のうち該当するものだけ PATCH する', async () => {
+    const k1 = baseKnowledge({ _id: 'k1', confidenceScore: 0.5 });
+    const k2 = baseKnowledge({ _id: 'k2', confidenceScore: 0.6 });
+    mockUpdateFetch(
+      [k1, k2],
+      [
+        { knowledgeId: 'k1', relation: 'supporting', likelihood: 'low' },
+        { knowledgeId: 'k2', relation: 'neutral',    likelihood: 'high' },
+      ],
+      1,
+    );
+
+    await updateKnowledgeFromExperience('釣り', '片方だけ関連する経験');
+
+    // list + Gemini + k1 の PATCH のみ（k2 は neutral なので PATCH なし）
+    expect(global.fetch).toHaveBeenCalledTimes(3);
+    const patchUrl: string = (global.fetch as jest.Mock).mock.calls[2][0];
+    expect(patchUrl).toContain('k1');
   });
 });
