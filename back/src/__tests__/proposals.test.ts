@@ -97,6 +97,7 @@ describe('GET /proposals', () => {
       distilledProposal: {
         content: '朝の練習の方が集中できる傾向がある',
         confidenceScore: 0.65,
+        noveltyScore: 0.7,
         supportingExperienceIds: [],
       },
     }));
@@ -189,6 +190,7 @@ describe('GET /proposals', () => {
       distilledProposal: {
         content: 'テスト',
         confidenceScore: 1.5,  // 1.0超
+        noveltyScore: 0.7,
         supportingExperienceIds: [],
       },
     }));
@@ -265,6 +267,7 @@ describe('GET /proposals', () => {
       distilledProposal: {
         content: 'パターン発見',
         confidenceScore: 0.7,
+        noveltyScore: 0.7,
         supportingExperienceIds: [exp._id.toString()],
       },
     }));
