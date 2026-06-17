@@ -149,6 +149,7 @@ export default function DashboardScreen() {
         sourceKnowledgeId:        proposal.sourceKnowledgeId,
         tags:                     [],
       });
+      await proposalApi.reject(proposal._id);
       await AsyncStorage.removeItem(PROPOSAL_CACHE_KEY(activeField));
       setProposal(null);
       const updated = await knowledgeApi.list({ field: activeField });

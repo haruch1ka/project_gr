@@ -35,29 +35,15 @@ async function callGemini(prompt: string): Promise<string> {
   return data.candidates?.[0]?.content?.parts?.[0]?.text ?? '{}';
 }
 
-// GET /proposals?field=xxx
-// 1. 既存のProposalがあれば返す
-// 2. なければ未分析の経験をGeminiで分析し、hypothesis更新 + distilled候補を検出
-router.get('/', async (req, res) => {
-  const { field } = req.query;
-  if (!field || typeof field !== 'string') {
-    res.status(400).json({ error: 'field は必須です' });
-    return;
-  }
-
-  // キャッシュ済みのProposalがあれば返す
+// 析出処理のコア（GETとPATCHから共用）
+export async function runDistillation(field: string): Promise<void> {
+  // キャッシュ済みのProposalがあればスキップ
   const existing = await Proposal.findOne({ field });
-  if (existing) {
-    res.json({ proposal: existing });
-    return;
-  }
+  if (existing) return;
 
   // 未分析の経験を取得
   const unanalyzed = await Experience.find({ field, analyzed: false }).sort({ createdAt: 1 });
-  if (unanalyzed.length === 0) {
-    res.json({ proposal: null });
-    return;
-  }
+  if (unanalyzed.length === 0) return;
 
   // hypothesis知識を取得（最大10件）
   const hypotheses = await Knowledge.find({ field, type: 'hypothesis' })
@@ -166,7 +152,6 @@ ${allExpText}
       { _id: { $in: unanalyzed.map(e => e._id) } },
       { $set: { analyzed: true } },
     );
-    res.json({ proposal: null });
     return;
   }
 
@@ -189,10 +174,10 @@ ${allExpText}
     { $set: { analyzed: true } },
   );
 
-  // distilled候補を保存して返す（noveltyScore < 0.3 は保存しない）
+  // distilled候補を保存（noveltyScore < 0.3 は保存しない）
   const dp = analysisResult.distilledProposal;
   if (dp && dp.content && (dp.noveltyScore ?? 0) >= 0.3) {
-    const saved = await Proposal.create({
+    await Proposal.create({
       field,
       content:                 dp.content,
       confidenceScore:         Math.min(1, Math.max(0, dp.confidenceScore)),
@@ -200,11 +185,20 @@ ${allExpText}
       supportingExperienceIds: dp.supportingExperienceIds ?? [],
       sourceKnowledgeId:       null,
     });
-    res.json({ proposal: saved });
+  }
+}
+
+// GET /proposals?field=xxx
+router.get('/', async (req, res) => {
+  const { field } = req.query;
+  if (!field || typeof field !== 'string') {
+    res.status(400).json({ error: 'field は必須です' });
     return;
   }
 
-  res.json({ proposal: null });
+  await runDistillation(field);
+  const proposal = await Proposal.findOne({ field });
+  res.json({ proposal: proposal ?? null });
 });
 
 // DELETE /proposals/:id  （却下）

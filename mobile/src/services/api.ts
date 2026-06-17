@@ -18,6 +18,8 @@ export const experienceApi = {
   },
   create: (body: Omit<Experience, '_id' | 'createdAt'>) =>
     request<Experience>('/experiences', { method: 'POST', body: JSON.stringify(body) }),
+  patch: (id: string, body: Partial<Pick<Experience, 'memo' | 'date'>>) =>
+    request<Experience>(`/experiences/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   remove: (id: string) =>
     request<{ ok: boolean }>(`/experiences/${id}`, { method: 'DELETE' }),
 };

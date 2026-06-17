@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   View, Text, StyleSheet, FlatList, ActivityIndicator, RefreshControl,
-  Animated, PanResponder, Alert, TouchableOpacity,
+  Animated, PanResponder, Alert, TouchableOpacity, Modal, TextInput,
+  TouchableWithoutFeedback, Keyboard, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useField } from '../context/FieldContext';
 import { colors, font } from '../constants/theme';
@@ -42,11 +43,20 @@ function useSwipeDelete() {
     Animated.timing(translateX, { toValue: -500, duration: 180, useNativeDriver: true }).start(cb);
   }
 
-  return { translateX, panResponder, slideOut };
+  function closeSwipe() {
+    revealedRef.current = false;
+    Animated.spring(translateX, { toValue: 0, useNativeDriver: true, bounciness: 0 }).start();
+  }
+
+  return { translateX, panResponder, revealedRef, slideOut, closeSwipe };
 }
 
-function ExperienceItem({ item, onDelete }: { item: Experience; onDelete: (id: string) => void }) {
-  const { translateX, panResponder, slideOut } = useSwipeDelete();
+function ExperienceItem({ item, onDelete, onEdit }: {
+  item:    Experience;
+  onDelete:(id: string) => void;
+  onEdit:  (item: Experience) => void;
+}) {
+  const { translateX, panResponder, revealedRef, slideOut, closeSwipe } = useSwipeDelete();
 
   const handleDelete = () => {
     Alert.alert(
@@ -59,6 +69,11 @@ function ExperienceItem({ item, onDelete }: { item: Experience; onDelete: (id: s
     );
   };
 
+  const handlePress = () => {
+    if (revealedRef.current) { closeSwipe(); return; }
+    onEdit(item);
+  };
+
   return (
     <View style={styles.swipeContainer}>
       <View style={styles.deleteAction}>
@@ -67,8 +82,10 @@ function ExperienceItem({ item, onDelete }: { item: Experience; onDelete: (id: s
         </TouchableOpacity>
       </View>
       <Animated.View style={[styles.item, { transform: [{ translateX }] }]} {...panResponder.panHandlers}>
-        <Text style={styles.date}>{item.date}</Text>
-        <Text style={styles.memo}>{item.memo}</Text>
+        <TouchableOpacity onPress={handlePress} activeOpacity={0.7} style={styles.itemInner}>
+          <Text style={styles.date}>{item.date}</Text>
+          <Text style={styles.memo}>{item.memo}</Text>
+        </TouchableOpacity>
       </Animated.View>
     </View>
   );
@@ -79,6 +96,10 @@ export default function ExperienceScreen() {
   const [logs, setLogs] = useState<Experience[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [editTarget, setEditTarget] = useState<Experience | null>(null);
+  const [editMemo,   setEditMemo]   = useState('');
+  const [editDate,   setEditDate]   = useState('');
+  const [saving,     setSaving]     = useState(false);
 
   const fetchLogs = useCallback(async (refresh = false) => {
     if (!field) { setLoading(false); return; }
@@ -118,6 +139,37 @@ export default function ExperienceScreen() {
     }
   }, [field]);
 
+  const openEdit = useCallback((item: Experience) => {
+    setEditTarget(item);
+    setEditMemo(item.memo);
+    setEditDate(item.date);
+  }, []);
+
+  const closeEdit = useCallback(() => {
+    setEditTarget(null);
+    setSaving(false);
+  }, []);
+
+  const handleSaveEdit = useCallback(async () => {
+    if (!editTarget?._id || !editMemo.trim() || saving) return;
+    setSaving(true);
+    try {
+      const updated = await experienceApi.patch(editTarget._id, {
+        memo: editMemo.trim(),
+        date: editDate.trim() || editTarget.date,
+      });
+      setLogs(prev => {
+        const next = prev.map(l => l._id === editTarget._id ? updated : l);
+        cacheWrite('experience', field, next);
+        return next;
+      });
+      closeEdit();
+    } catch (e) {
+      console.error(e);
+      setSaving(false);
+    }
+  }, [editTarget, editMemo, editDate, saving, field, closeEdit]);
+
   useEffect(() => { fetchLogs(); }, [fetchLogs]);
 
   return (
@@ -143,12 +195,56 @@ export default function ExperienceScreen() {
               <Text style={styles.emptySub}>中央ボタンから記録を残せます</Text>
             </View>
           }
-          renderItem={({ item }) => <ExperienceItem item={item} onDelete={handleDelete} />}
+          renderItem={({ item }) => (
+            <ExperienceItem item={item} onDelete={handleDelete} onEdit={openEdit} />
+          )}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
           }
         />
       )}
+
+      <Modal visible={editTarget !== null} transparent animationType="slide">
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={styles.overlay}>
+            <View style={styles.modal}>
+              <Text style={styles.modalTitle}>記録を編集</Text>
+              <TextInput
+                style={styles.dateInput}
+                value={editDate}
+                onChangeText={setEditDate}
+                placeholder="日付（例：6/17）"
+                placeholderTextColor={colors.textMuted}
+              />
+              <TextInput
+                style={styles.memoInput}
+                value={editMemo}
+                onChangeText={setEditMemo}
+                multiline
+                autoFocus
+                placeholder="メモ"
+                placeholderTextColor={colors.textMuted}
+              />
+              <View style={styles.modalActions}>
+                <TouchableOpacity onPress={closeEdit}>
+                  <Text style={styles.cancelBtn}>キャンセル</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.saveBtn} onPress={handleSaveEdit} disabled={saving}>
+                  {saving
+                    ? <ActivityIndicator color="#fff" size="small" />
+                    : <Text style={styles.saveBtnText}>保存</Text>
+                  }
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -169,14 +265,31 @@ const styles = StyleSheet.create({
     padding: 10, justifyContent: 'center', alignItems: 'center',
   },
   item: {
-    flexDirection: 'row', gap: 12, paddingVertical: 12,
     borderBottomWidth: 1, borderBottomColor: colors.border,
     backgroundColor: colors.bg,
   },
+  itemInner: { flexDirection: 'row', gap: 12, paddingVertical: 12 },
   date:      { fontSize: 12, color: colors.textMuted, width: 36, paddingTop: 2 },
   memo:      { flex: 1, fontSize: font.sm, color: colors.text, lineHeight: 20 },
   emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10 },
   emptyIcon: { fontSize: 40 },
   emptyText: { fontSize: font.md, fontWeight: '600', color: colors.textMuted },
   emptySub:  { fontSize: font.sm, color: colors.textMuted, textAlign: 'center' },
+
+  overlay:      { flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'flex-end', margin: 0 },
+  modal:        { backgroundColor: colors.bg, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, gap: 12 },
+  modalTitle:   { fontSize: font.lg, fontWeight: '700', color: colors.text },
+  dateInput: {
+    borderWidth: 1.5, borderColor: colors.borderInput, borderRadius: 10,
+    padding: 12, fontSize: font.sm, color: colors.text, backgroundColor: colors.bgInput,
+  },
+  memoInput: {
+    borderWidth: 1.5, borderColor: colors.borderInput, borderRadius: 10,
+    padding: 12, fontSize: font.sm, color: colors.text, backgroundColor: colors.bgInput,
+    textAlignVertical: 'top', height: 100,
+  },
+  modalActions: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 16 },
+  cancelBtn:    { fontSize: font.md, color: colors.textMuted },
+  saveBtn:      { backgroundColor: colors.primary, borderRadius: 10, paddingHorizontal: 20, paddingVertical: 10, minWidth: 60, alignItems: 'center' },
+  saveBtnText:  { color: '#000', fontWeight: '700', fontSize: font.md },
 });
