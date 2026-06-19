@@ -16,6 +16,11 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
   const doc = await Experience.create(req.body);
   res.status(201).json(doc);
+
+  // 析出をバックグラウンドで実行（レスポンス後）
+  if (doc.field) {
+    runDistillation(doc.field).catch(console.error);
+  }
 });
 
 // 1件更新

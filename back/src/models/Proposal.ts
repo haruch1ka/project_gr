@@ -7,6 +7,9 @@ const proposalSchema = new Schema({
   noveltyScore:            { type: Number, default: null, min: 0, max: 1 },
   supportingExperienceIds: { type: [String], default: [] },
   sourceKnowledgeId:       { type: String, default: null },
+  // 新規追加か既存知識のアップデートか
+  action:                  { type: String, enum: ['new', 'update'], default: 'new' },
+  targetKnowledgeId:       { type: String, default: null },
   detectedAt:              { type: Date, default: Date.now },
   expiresAt:               { type: Date, default: () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) },
 });

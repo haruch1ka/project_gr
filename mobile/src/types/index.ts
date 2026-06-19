@@ -56,6 +56,8 @@ export type KnowledgeProposal = {
   noveltyScore?: number | null;
   supportingExperienceIds: string[];
   sourceKnowledgeId: string | null;
+  action: 'new' | 'update';
+  targetKnowledgeId: string | null;
   detectedAt: string;
 };
 
@@ -72,4 +74,16 @@ export type Plan = {
 export type ChatMessage = {
   role: 'user' | 'assistant';
   text: string;
+};
+
+export type Survey = {
+  _id: string;
+  field: string;
+  question: string;
+  choices: string[];
+  status: 'active' | 'answered' | 'skipped';
+  answer: string | null;
+  answeredAt: string | null;
+  nextSurveyAt: string | null;
+  createdAt: string;
 };

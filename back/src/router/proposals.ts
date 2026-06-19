@@ -10,6 +10,7 @@ const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/
 
 // 尤度係数
 const LIKELIHOOD_FACTOR: Record<string, number> = { high: 1.0, medium: 0.6, low: 0.3 };
+const DELETION_THRESHOLD = 0.03;
 
 export function updateScore(score: number, direction: string, likelihood: string): number {
   const factor = LIKELIHOOD_FACTOR[likelihood] ?? 0.3;
@@ -168,6 +169,9 @@ ${allExpText}
       }),
   );
 
+  // 閾値を下回った知識を削除
+  await Knowledge.deleteMany({ field, confidenceScore: { $lt: DELETION_THRESHOLD } });
+
   // 経験を分析済みにマーク
   await Experience.updateMany(
     { _id: { $in: unanalyzed.map(e => e._id) } },
@@ -177,14 +181,81 @@ ${allExpText}
   // distilled候補を保存（noveltyScore < 0.3 は保存しない）
   const dp = analysisResult.distilledProposal;
   if (dp && dp.content && (dp.noveltyScore ?? 0) >= 0.3) {
+    // 既存のdistilled知識と類似していないか第2段階で検証
+    const similarity = await detectSimilarity(dp.content, existingDistilled);
+
     await Proposal.create({
       field,
-      content:                 dp.content,
+      content:                 similarity?.mergedContent ?? dp.content,
       confidenceScore:         Math.min(1, Math.max(0, dp.confidenceScore)),
       noveltyScore:            Math.min(1, Math.max(0, dp.noveltyScore)),
       supportingExperienceIds: dp.supportingExperienceIds ?? [],
       sourceKnowledgeId:       null,
+      action:                  similarity ? 'update' : 'new',
+      targetKnowledgeId:       similarity?.targetKnowledgeId ?? null,
     });
+  }
+}
+
+type DistilledDoc = { _id: unknown; content: string };
+
+// 第2段階：新規コンテンツと既存distilledの類似検知
+async function detectSimilarity(
+  newContent: string,
+  existingDistilled: DistilledDoc[],
+): Promise<{ targetKnowledgeId: string; mergedContent: string } | null> {
+  if (existingDistilled.length === 0) return null;
+
+  const existingText = existingDistilled
+    .map(k => `- ID:${String(k._id)} 内容:「${k.content}」`)
+    .join('\n');
+
+  const prompt = `以下の「新しい洞察」が、既存の知識リストのいずれかと実質的に同じ内容（または発展・精緻化）であるか判定してください。
+
+【判定基準】
+- 内容の核心が70%以上重複している場合は "update" とする
+- 観点が異なる・補完的な場合は "new" とする
+
+【updateの場合：更新文章の作成ルール】
+既存知識を「新しい洞察で上書き・精緻化」した文章を1文で作成してください。
+
+禁止事項：
+- 両方の内容をそのままつなげない（「〜であり、また〜」のような羅列はしない）
+- 既存知識にない情報を加えない
+- 1文を超えない
+
+目標：既存知識より正確・具体的になること。長くなるなら既存知識をそのまま返す。
+
+--- 新しい洞察 ---
+${newContent}
+
+--- 既存の知識 ---
+${existingText}
+
+必ず以下のJSON形式のみで返してください：
+{
+  "action": "new" | "update",
+  "targetKnowledgeId": "既存知識のID文字列" | null,
+  "mergedContent": "更新後の文章（1文）" | null
+}`;
+
+  try {
+    const raw = await callGemini(prompt);
+    const result = JSON.parse(raw) as {
+      action: string;
+      targetKnowledgeId: string | null;
+      mergedContent: string | null;
+    };
+    if (result.action !== 'update' || !result.targetKnowledgeId || !result.mergedContent) {
+      return null;
+    }
+    // IDが実際に存在するか確認（Geminiの誤返答を防ぐ）
+    const exists = existingDistilled.find((k: DistilledDoc) => String(k._id) === result.targetKnowledgeId);
+    if (!exists) return null;
+
+    return { targetKnowledgeId: result.targetKnowledgeId, mergedContent: result.mergedContent };
+  } catch {
+    return null;
   }
 }
 

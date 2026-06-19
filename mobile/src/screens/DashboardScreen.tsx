@@ -132,23 +132,27 @@ export default function DashboardScreen() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // proposal確認：Knowledge登録 → キャッシュ削除
+  // proposal確認：新規 or 既存アップデートを action で分岐
   const handleConfirmProposal = useCallback(async () => {
     if (!proposal) return;
     try {
-      await knowledgeApi.create({
-        field:                    activeField,
-        type:                     'distilled',
-        category:                 '発見',
-        content:                  proposal.content,
-        webSources:               [],
-        supportingExperiences:    [],
-        contradictingExperiences: [],
-        confidenceScore:          proposal.confidenceScore,
-        noveltyScore:             proposal.noveltyScore ?? null,
-        sourceKnowledgeId:        proposal.sourceKnowledgeId,
-        tags:                     [],
-      });
+      if (proposal.action === 'update' && proposal.targetKnowledgeId) {
+        await knowledgeApi.patch(proposal.targetKnowledgeId, { content: proposal.content });
+      } else {
+        await knowledgeApi.create({
+          field:                    activeField,
+          type:                     'distilled',
+          category:                 '発見',
+          content:                  proposal.content,
+          webSources:               [],
+          supportingExperiences:    [],
+          contradictingExperiences: [],
+          confidenceScore:          proposal.confidenceScore,
+          noveltyScore:             proposal.noveltyScore ?? null,
+          sourceKnowledgeId:        proposal.sourceKnowledgeId,
+          tags:                     [],
+        });
+      }
       await proposalApi.reject(proposal._id);
       await AsyncStorage.removeItem(PROPOSAL_CACHE_KEY(activeField));
       setProposal(null);
@@ -156,7 +160,7 @@ export default function DashboardScreen() {
       setKnowledge(updated);
       await cacheWrite('knowledge', activeField, updated);
     } catch {
-      Alert.alert('エラー', '知識の保存に失敗しました');
+      Alert.alert('エラー', proposal.action === 'update' ? '知識の更新に失敗しました' : '知識の保存に失敗しました');
     }
   }, [proposal, activeField]);
 
@@ -203,7 +207,9 @@ export default function DashboardScreen() {
         {/* distilled提案カード */}
         {proposal && (
           <View style={styles.proposalCard}>
-            <Text style={styles.proposalLabel}>✨ Geminiの発見</Text>
+            <Text style={styles.proposalLabel}>
+              {proposal.action === 'update' ? '🔄 Geminiの更新提案' : '✨ Geminiの発見'}
+            </Text>
             <Text style={styles.proposalContent}>{proposal.content}</Text>
             <View style={styles.proposalActions}>
               <TouchableOpacity
@@ -211,7 +217,9 @@ export default function DashboardScreen() {
                 onPress={handleConfirmProposal}
                 activeOpacity={0.7}
               >
-                <Text style={styles.proposalConfirmText}>知識として保存</Text>
+                <Text style={styles.proposalConfirmText}>
+                  {proposal.action === 'update' ? '知識を更新' : '知識として保存'}
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.proposalReject}

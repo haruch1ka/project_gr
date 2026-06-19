@@ -1,17 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
   ScrollView, Modal, TextInput, ActivityIndicator, TouchableWithoutFeedback, Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Polyline, Circle, G } from 'react-native-svg';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
 import { colors, font, radius } from '../constants/theme';
 import { mockKnowledge, mockExperiences } from '../constants/mockData';
 import { useField } from '../context/FieldContext';
-import { Field } from '../types';
+import { Field, Survey } from '../types';
+import { surveyApi } from '../services/api';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -148,10 +149,53 @@ export default function HomeScreen() {
   const [newName, setNewName] = useState('');
   const [newIcon, setNewIcon] = useState('🎯');
   const [saving, setSaving] = useState(false);
+  const [survey, setSurvey] = useState<Survey | null>(null);
+  const [surveyLoading, setSurveyLoading] = useState(false);
+  const [answering, setAnswering] = useState(false);
 
   const today = new Date().toLocaleDateString('ja-JP', {
     year: 'numeric', month: 'long', day: 'numeric', weekday: 'short',
   });
+
+  // アクティブな分野が1つ以上あればアンケートを取得
+  const loadSurvey = useCallback(async () => {
+    if (fields.length === 0) return;
+    const targetField = fields[0].name;
+    setSurveyLoading(true);
+    try {
+      const { survey: fetched } = await surveyApi.fetch(targetField);
+      setSurvey(fetched);
+    } catch {
+      // サイレントに失敗
+    } finally {
+      setSurveyLoading(false);
+    }
+  }, [fields]);
+
+  useFocusEffect(useCallback(() => { loadSurvey(); }, [loadSurvey]));
+
+  async function handleAnswer(choice: string) {
+    if (!survey || answering) return;
+    setAnswering(true);
+    try {
+      await surveyApi.answer(survey._id, choice);
+      setSurvey(null);
+    } catch {
+      // サイレントに失敗
+    } finally {
+      setAnswering(false);
+    }
+  }
+
+  async function handleSkip() {
+    if (!survey) return;
+    try {
+      await surveyApi.skip(survey._id);
+      setSurvey(null);
+    } catch {
+      // サイレントに失敗
+    }
+  }
 
   async function handleAddField() {
     if (!newName.trim() || saving) return;
@@ -179,23 +223,43 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* アンケートバナー（サンプル） */}
-        <View style={styles.surveyCard}>
-          <Text style={styles.surveyIcon}>🔔</Text>
-          <View style={styles.surveyBody}>
-            <Text style={styles.surveyLabel}>アンケート</Text>
-            <Text style={styles.surveyQ}>
-              前回「濁り×アピール系」を試しましたね。結果はどうでしたか？
-            </Text>
+        {/* アンケートバナー */}
+        {surveyLoading && (
+          <View style={styles.surveyCard}>
+            <ActivityIndicator size="small" color={colors.amber} style={{ marginRight: 8 }} />
+            <View style={styles.surveyBody}>
+              <Text style={styles.surveyLabel}>アンケート</Text>
+              <Text style={styles.surveyQ}>読み込み中…</Text>
+            </View>
           </View>
-        </View>
-        <View style={styles.surveyButtons}>
-          {['効果あり', '変化なし', '逆効果'].map(label => (
-            <TouchableOpacity key={label} style={styles.surveyBtn} activeOpacity={0.7}>
-              <Text style={styles.surveyBtnText}>{label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        )}
+        {!surveyLoading && survey && (
+          <>
+            <View style={styles.surveyCard}>
+              <Text style={styles.surveyIcon}>🔔</Text>
+              <View style={styles.surveyBody}>
+                <Text style={styles.surveyLabel}>アンケート</Text>
+                <Text style={styles.surveyQ}>{survey.question}</Text>
+              </View>
+              <TouchableOpacity onPress={handleSkip} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Text style={styles.surveySkip}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.surveyButtons}>
+              {survey.choices.map(label => (
+                <TouchableOpacity
+                  key={label}
+                  style={[styles.surveyBtn, answering && { opacity: 0.5 }]}
+                  onPress={() => handleAnswer(label)}
+                  disabled={answering}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.surveyBtnText}>{label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </>
+        )}
 
         {/* 知識ステータスチャート */}
         <KnowledgeStatusChart fields={fields} />
@@ -312,6 +376,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm, paddingVertical: 10, alignItems: 'center',
   },
   surveyBtnText: { fontSize: font.sm, color: colors.text, fontWeight: '500' },
+  surveySkip: { fontSize: 14, color: colors.textMuted, paddingLeft: 8 },
 
   chartCard: {
     backgroundColor: colors.bgCard,
