@@ -433,7 +433,8 @@ export default function KnowledgeScreen() {
       if (filterCustom.size > 0) {
         const hit = [...filterCustom].some(w => {
           const lw = w.toLowerCase();
-          return k.category?.toLowerCase().includes(lw) ||
+          return k.content?.toLowerCase().includes(lw) ||
+                 k.category?.toLowerCase().includes(lw) ||
                  (k.tags ?? []).some(t => t.toLowerCase().includes(lw));
         });
         if (!hit) return false;
